@@ -258,7 +258,8 @@ app.get('/api/probe/:id', (req, res) => {
 });
 
 // ─── GET /api/ai-status ─────────────────────────────────────────────
-app.get('/api/ai-status', (req, res) => {
+app.get('/api/ai-status', async (req, res) => {
+    aiStatus = await aiUpscaler.checkAIAvailability();
     res.json(aiStatus);
 });
 
@@ -750,9 +751,11 @@ async function start() {
     await checkFFmpeg();
 
     // Check AI tool availability
-    aiStatus = aiUpscaler.checkAIAvailability();
+    aiStatus = await aiUpscaler.checkAIAvailability();
     if (aiStatus.available) {
+        const gpuName = aiStatus.gpu ? aiStatus.gpu.name : 'Default GPU';
         console.log(`✅ Real-ESRGAN detected at: ${aiStatus.path}`);
+        console.log(`🚀 GPU Acceleration Enabled: "${gpuName}"`);
     } else {
         console.log(`⚠️  Real-ESRGAN not found (AI upscaling disabled)`);
         console.log(`   Run "node setup-tools.js" to install automatically`);

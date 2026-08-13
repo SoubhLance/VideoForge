@@ -2,10 +2,10 @@
  * ai-upscaler.js — Real-ESRGAN CLI integration for video upscaling
  * 
  * Pipeline:
- *   1. Extract frames from video (FFmpeg)
- *   2. Enhance frames with Real-ESRGAN CLI (child_process.spawn)
- *   3. Reconstruct video from enhanced frames (FFmpeg)
- *   4. Mux original audio back in (FFmpeg)
+ *   1. Auto-detect discrete GPU (NVIDIA / AMD) for maximum performance
+ *   2. Extract frames from video (FFmpeg with safe FPS handling)
+ *   3. Enhance frames with Real-ESRGAN CLI using GPU acceleration
+ *   4. Reconstruct video from enhanced frames & mux audio from source (FFmpeg)
  *   5. Cleanup temp files
  */
 
@@ -17,6 +17,9 @@ const ffmpeg = require('fluent-ffmpeg');
 const TOOLS_DIR = path.join(__dirname, 'tools');
 const TEMP_DIR = path.join(__dirname, 'temp');
 const EXE_NAME = 'realesrgan-ncnn-vulkan.exe';
+
+// Cached GPU info
+let detectedGpu = { id: 0, name: 'Auto/Default' };
 
 // ─── Find Real-ESRGAN executable ────────────────────────────────────
 function findExe(dir) {
@@ -33,25 +36,106 @@ function findExe(dir) {
   return null;
 }
 
+// ─── Detect Best GPU (NVIDIA / AMD discrete GPU over Intel iGPU) ─────
+function detectBestGpu(exePath) {
+  try {
+    const testImg = path.join(TOOLS_DIR, 'input.jpg');
+    const testOut = path.join(TEMP_DIR, '_gputest.jpg');
+    if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
+
+    const args = fs.existsSync(testImg) 
+      ? ['-i', testImg, '-o', testOut] 
+      : ['-v'];
+
+    const res = spawn(exePath, args, { cwd: path.dirname(exePath) });
+    let output = '';
+    
+    return new Promise((resolve) => {
+      res.stdout.on('data', (d) => output += d.toString());
+      res.stderr.on('data', (d) => output += d.toString());
+      
+      const timeout = setTimeout(() => {
+        try { res.kill(); } catch (e) {}
+        resolve({ id: 0, name: 'Default GPU' });
+      }, 6000);
+
+      res.on('close', () => {
+        clearTimeout(timeout);
+        try { if (fs.existsSync(testOut)) fs.unlinkSync(testOut); } catch (e) {}
+
+        const gpuLines = output.split('\n').filter(l => l.includes('[') && l.includes(']'));
+        
+        let bestId = 0;
+        let bestName = 'Default GPU';
+        const gpus = [];
+
+        for (const line of gpuLines) {
+          const match = line.match(/\[(\d+)\s+([^\]]+)\]/);
+          if (match) {
+            const id = parseInt(match[1], 10);
+            const name = match[2].trim();
+            if (!gpus.some(g => g.id === id)) {
+              gpus.push({ id, name });
+            }
+          }
+        }
+
+        if (gpus.length > 0) {
+          // Prefer discrete GPUs (NVIDIA / GeForce / RTX / GTX / Radeon / AMD / Arc)
+          const discreteKeywords = ['nvidia', 'geforce', 'rtx', 'gtx', 'radeon', 'amd', 'arc'];
+          const discreteGpu = gpus.find(g => 
+            discreteKeywords.some(kw => g.name.toLowerCase().includes(kw))
+          );
+
+          if (discreteGpu) {
+            bestId = discreteGpu.id;
+            bestName = discreteGpu.name;
+          } else {
+            bestId = gpus[gpus.length - 1].id;
+            bestName = gpus[gpus.length - 1].name;
+          }
+        }
+
+        console.log(`[GPU Setup] Detected ${gpus.length} GPU(s). Selected GPU ${bestId}: "${bestName}"`);
+        detectedGpu = { id: bestId, name: bestName };
+        resolve({ id: bestId, name: bestName });
+      });
+    });
+  } catch (err) {
+    return Promise.resolve({ id: 0, name: 'Default GPU' });
+  }
+}
+
 // ─── Check if AI upscaler is available ──────────────────────────────
-function checkAIAvailability() {
+async function checkAIAvailability() {
   const exePath = findExe(TOOLS_DIR);
   if (!exePath) {
     return { available: false, path: null, reason: 'Real-ESRGAN executable not found in tools/' };
   }
 
-  // Quick verification
-  try {
-    execSync(`"${exePath}" -h`, { stdio: 'pipe', timeout: 10000 });
-  } catch (err) {
-    // realesrgan-ncnn-vulkan exits non-zero for -h but still works
-    const output = (err.stderr || '').toString() + (err.stdout || '').toString();
-    if (!output.includes('Usage') && !output.includes('scale') && !output.includes('input')) {
-      return { available: false, path: exePath, reason: 'Executable found but failed verification' };
-    }
+  if (!detectedGpu || detectedGpu.name === 'Auto/Default' || detectedGpu.name === 'Default GPU') {
+    detectedGpu = await detectBestGpu(exePath);
   }
 
-  return { available: true, path: exePath };
+  return { available: true, path: exePath, gpu: detectedGpu };
+}
+
+// ─── Safe FPS parser ────────────────────────────────────────────────
+function parseFps(fpsStr) {
+  if (!fpsStr) return 30;
+  try {
+    if (typeof fpsStr === 'number') return fpsStr > 0 ? fpsStr : 30;
+    const parts = String(fpsStr).split('/');
+    if (parts.length === 2) {
+      const num = parseFloat(parts[0]);
+      const den = parseFloat(parts[1]);
+      if (den > 0 && num > 0) return num / den;
+    }
+    const val = parseFloat(fpsStr);
+    return isNaN(val) || val <= 0 ? 30 : val;
+  } catch (e) {
+    return 30;
+  }
 }
 
 // ─── Ensure temp directories exist ──────────────────────────────────
@@ -71,38 +155,35 @@ function ensureTempDirs(jobId) {
 function cleanupTemp(jobId) {
   const jobTempDir = path.join(TEMP_DIR, jobId);
   if (fs.existsSync(jobTempDir)) {
-    fs.rmSync(jobTempDir, { recursive: true, force: true });
+    try {
+      fs.rmSync(jobTempDir, { recursive: true, force: true });
+    } catch (e) {
+      console.warn(`[Cleanup] Non-fatal cleanup warning for ${jobId}: ${e.message}`);
+    }
   }
 }
 
 // ─── Step 1: Extract frames from video ──────────────────────────────
 function extractFrames(inputPath, framesDir, fps) {
   return new Promise((resolve, reject) => {
-    // Get frame count estimate first
     ffmpeg.ffprobe(inputPath, (err, metadata) => {
       if (err) return reject(new Error(`Probe failed: ${err.message}`));
 
       const videoStream = metadata.streams.find(s => s.codec_type === 'video');
       const duration = parseFloat(metadata.format.duration || 0);
-      const sourceFps = videoStream && videoStream.r_frame_rate
-        ? eval(videoStream.r_frame_rate)
-        : 30;
+      const sourceFps = videoStream ? parseFps(videoStream.r_frame_rate || videoStream.avg_frame_rate) : 30;
 
-      // Use source FPS if not specified
       const targetFps = fps || sourceFps;
-      const estimatedFrames = Math.ceil(duration * targetFps);
-
       const outputPattern = path.join(framesDir, 'frame_%06d.jpg');
 
       const cmd = ffmpeg(inputPath)
         .outputOptions([
           '-vf', `fps=${targetFps}`,
-          '-q:v', '2'  // High-quality JPEG for 90% size reduction and faster I/O
+          '-q:v', '2'  // High-quality JPEG for fast GPU I/O
         ])
         .output(outputPattern);
 
       cmd.on('end', () => {
-        // Count actual frames extracted
         const files = fs.readdirSync(framesDir).filter(f => f.endsWith('.jpg'));
         resolve({
           frameCount: files.length,
@@ -120,216 +201,138 @@ function extractFrames(inputPath, framesDir, fps) {
   });
 }
 
-// ─── Step 2: Extract audio track ────────────────────────────────────
-function extractAudio(inputPath, audioOutputPath) {
-  return new Promise((resolve, reject) => {
-    // Check if input has audio
-    ffmpeg.ffprobe(inputPath, (probeErr, metadata) => {
-      if (probeErr) return reject(new Error(`Audio probe failed: ${probeErr.message}`));
-
-      const audioStream = metadata.streams.find(s => s.codec_type === 'audio');
-      if (!audioStream) {
-        return resolve({ hasAudio: false });
-      }
-
-      const cmd = ffmpeg(inputPath)
-        .outputOptions(['-vn', '-acodec', 'copy'])
-        .output(audioOutputPath);
-
-      cmd.on('end', () => resolve({ hasAudio: true, path: audioOutputPath }));
-      cmd.on('error', (err) => {
-        // If audio extraction fails, continue without audio
-        console.warn('Audio extraction failed, continuing without audio:', err.message);
-        resolve({ hasAudio: false });
-      });
-      cmd.run();
-    });
-  });
-}
-
-// ─── Step 3: Enhance frames with Real-ESRGAN ───────────────────────
-function enhanceFrames(exePath, framesInputDir, framesOutputDir, scale, job) {
+// ─── Step 2: Enhance frames with Real-ESRGAN ───────────────────────
+function enhanceFrames(exePath, framesInputDir, framesOutputDir, scale, job, gpuId = 0) {
   return new Promise((resolve, reject) => {
     const totalFrames = fs.readdirSync(framesInputDir).filter(f => f.endsWith('.jpg')).length;
     if (totalFrames === 0) {
       return reject(new Error('No frames to enhance'));
     }
 
-    // Determine model name based on scale
-    // realesrgan-x4plus works for both 2x and 4x (the tool handles scale param)
-    const modelName = 'realesrgan-x4plus';
-    const scaleNum = scale === '4x' ? 4 : 2;
+    // Determine scale and model
+    const scaleNum = scale === '4x' || scale === 'ai-enhance' ? 4 : 2;
+    // Use realesr-animevideov3 for 2x, realesrgan-x4plus for 4x/ai-enhance
+    const modelName = scaleNum === 2 ? 'realesr-animevideov3' : 'realesrgan-x4plus';
 
-    // Build args — process entire directory at once
     const args = [
       '-i', framesInputDir,
       '-o', framesOutputDir,
       '-s', String(scaleNum),
       '-n', modelName,
+      '-g', String(gpuId), // Explicit GPU ID (e.g. 1 for NVIDIA RTX 4060)
       '-f', 'jpg',
-      '-j', '1:2:2'  // Thread config: load:proc:save — conservative to avoid OOM
+      '-j', '1:2:2'
     ];
 
-    job.stage = `Enhancing frames with AI (0/${totalFrames})...`;
-    job.progress = 10; // Base progress after frame extraction
-
-    // Progressive cleanup: delete input frames as soon as their enhanced version exists
-    const cleanInterval = setInterval(() => {
-      try {
-        if (!fs.existsSync(framesOutputDir)) return;
-        const outFiles = fs.readdirSync(framesOutputDir);
-        for (const file of outFiles) {
-          if (file.endsWith('.jpg')) {
-            const inputFilePath = path.join(framesInputDir, file);
-            if (fs.existsSync(inputFilePath)) {
-              fs.unlinkSync(inputFilePath);
-            }
-          }
-        }
-      } catch (e) {
-        // Ignore deletion errors
-      }
-    }, 1000);
+    job.stage = `Enhancing frames with AI on GPU (0/${totalFrames})...`;
+    job.progress = 10;
 
     const proc = spawn(exePath, args, {
-      cwd: path.dirname(exePath), // Run from tools dir so models are found
+      cwd: path.dirname(exePath),
       stdio: ['pipe', 'pipe', 'pipe']
     });
 
     let stderrBuffer = '';
 
     proc.stdout.on('data', (data) => {
-      const text = data.toString();
-      // Real-ESRGAN outputs progress like "XX.XX%" 
-      updateProgressFromOutput(text, totalFrames, job);
+      updateProgressFromOutput(data.toString(), totalFrames, job);
     });
 
     proc.stderr.on('data', (data) => {
       const text = data.toString();
       stderrBuffer += text;
-      // Real-ESRGAN also outputs progress to stderr
       updateProgressFromOutput(text, totalFrames, job);
     });
 
     proc.on('close', (code) => {
-      clearInterval(cleanInterval);
-      if (code !== 0) {
-        // Check if any output frames exist despite error code
-        const outputFrames = fs.existsSync(framesOutputDir)
-          ? fs.readdirSync(framesOutputDir).filter(f => f.endsWith('.jpg'))
-          : [];
+      const outputFrames = fs.existsSync(framesOutputDir)
+        ? fs.readdirSync(framesOutputDir).filter(f => f.endsWith('.jpg'))
+        : [];
 
-        if (outputFrames.length >= totalFrames * 0.9) {
-          // Most frames processed, consider it success
-          console.warn(`Real-ESRGAN exited with code ${code} but ${outputFrames.length}/${totalFrames} frames enhanced`);
-          resolve({ enhancedCount: outputFrames.length, totalFrames });
-        } else {
-          reject(new Error(
-            `Real-ESRGAN failed (exit code ${code}). ` +
-            `Processed ${outputFrames.length}/${totalFrames} frames. ` +
-            `Error: ${stderrBuffer.slice(-500)}`
-          ));
-        }
+      if (code !== 0 && outputFrames.length < totalFrames * 0.85) {
+        reject(new Error(
+          `Real-ESRGAN failed (exit code ${code}). ` +
+          `Processed ${outputFrames.length}/${totalFrames} frames. ` +
+          `Error: ${stderrBuffer.slice(-500)}`
+        ));
       } else {
-        const outputFrames = fs.readdirSync(framesOutputDir).filter(f => f.endsWith('.jpg'));
         resolve({ enhancedCount: outputFrames.length, totalFrames });
       }
     });
 
     proc.on('error', (err) => {
-      clearInterval(cleanInterval);
       reject(new Error(`Failed to spawn Real-ESRGAN: ${err.message}`));
     });
   });
 }
 
 function updateProgressFromOutput(text, totalFrames, job) {
-  // Real-ESRGAN outputs percentage per frame
   const percentMatch = text.match(/([\d.]+)%/);
   if (percentMatch) {
     const rawPct = parseFloat(percentMatch[1]);
-    // Map 0-100% of AI processing to the 10-85% range of overall job progress
     const mappedProgress = Math.round(10 + (rawPct / 100) * 75);
     job.progress = Math.min(mappedProgress, 85);
   }
 
-  // Also try to count completed frames by checking output dir
   const frameMatch = text.match(/(\d+)\/(\d+)/);
   if (frameMatch) {
     const done = parseInt(frameMatch[1]);
     const total = parseInt(frameMatch[2]);
-    job.stage = `Enhancing frames with AI (${done}/${total})...`;
+    job.stage = `Enhancing frames with AI on GPU (${done}/${total})...`;
     const mappedProgress = Math.round(10 + (done / total) * 75);
     job.progress = Math.min(mappedProgress, 85);
   }
 }
 
-// ─── Step 4: Rebuild video from enhanced frames ─────────────────────
-function rebuildVideo(framesDir, audioInfo, outputPath, fps, formatSettings) {
+// ─── Step 3: Rebuild video from enhanced frames & Mux Source Audio ──
+function rebuildVideo(framesDir, inputPath, outputPath, fps, formatSettings) {
   return new Promise((resolve, reject) => {
     const framePattern = path.join(framesDir, 'frame_%06d.jpg');
 
-    // Check that frames exist
     const frameFiles = fs.readdirSync(framesDir).filter(f => f.endsWith('.jpg'));
     if (frameFiles.length === 0) {
       return reject(new Error('No enhanced frames found for video reconstruction'));
     }
 
+    // Input 0: Enhanced frames
+    // Input 1: Original video file (for audio muxing)
     let cmd = ffmpeg()
       .input(framePattern)
-      .inputFPS(fps);
-
-    // Add audio if available
-    if (audioInfo.hasAudio) {
-      cmd = cmd.input(audioInfo.path);
-    }
+      .inputFPS(fps)
+      .input(inputPath);
 
     // Video encoding
     if (formatSettings.vcodec) {
       cmd = cmd.videoCodec(formatSettings.vcodec);
     }
 
-    // Build output options
     const outputOpts = [];
 
     if (formatSettings.crf !== undefined) {
       outputOpts.push('-crf', String(formatSettings.crf));
     }
 
-    // Fast transcode preset for rebuild to speed up reconstruction
     if (formatSettings.vcodec === 'libx264' || formatSettings.vcodec === 'libx265') {
-      if (formatSettings.preset) {
-        outputOpts.push('-preset', formatSettings.preset);
-      }
+      outputOpts.push('-preset', formatSettings.preset || 'fast');
     }
 
-    if (formatSettings.vcodec === 'libvpx-vp9') {
-      outputOpts.push('-b:v', '0');
-    }
-
-    // Pixel format for compatibility
     outputOpts.push('-pix_fmt', 'yuv420p');
 
     if (formatSettings.extraArgs && formatSettings.extraArgs.length > 0) {
       outputOpts.push(...formatSettings.extraArgs);
     }
 
-    if (outputOpts.length > 0) {
-      cmd = cmd.outputOptions(outputOpts);
+    // Map video stream from frames (0:v:0) and audio stream from input file if exists (1:a:0?)
+    outputOpts.push('-map', '0:v:0', '-map', '1:a:0?', '-shortest');
+
+    if (formatSettings.acodec) {
+      cmd = cmd.audioCodec(formatSettings.acodec);
+    }
+    if (formatSettings.audioBitrate) {
+      cmd = cmd.audioBitrate(formatSettings.audioBitrate);
     }
 
-    // Audio encoding
-    if (audioInfo.hasAudio) {
-      if (formatSettings.acodec) {
-        cmd = cmd.audioCodec(formatSettings.acodec);
-      }
-      if (formatSettings.audioBitrate) {
-        cmd = cmd.audioBitrate(formatSettings.audioBitrate);
-      }
-      // Map streams: video from frames, audio from audio file
-      cmd = cmd.outputOptions(['-map', '0:v', '-map', '1:a', '-shortest']);
-    }
-
+    cmd.outputOptions(outputOpts);
     cmd.output(outputPath);
 
     cmd.on('end', () => resolve());
@@ -345,13 +348,12 @@ async function processVideoWithAI(job, options) {
     outputPath,
     format,
     quality,
-    scale,      // '2x' or '4x'
+    scale,
     formatSettings
   } = options;
 
   const jobId = path.basename(inputPath, path.extname(inputPath));
   const { jobTempDir, framesInput, framesOutput } = ensureTempDirs(jobId);
-  const audioPath = path.join(jobTempDir, 'audio.aac');
 
   const aiCheck = checkAIAvailability();
   if (!aiCheck.available) {
@@ -365,37 +367,32 @@ async function processVideoWithAI(job, options) {
     console.log(`[AI] Extracting frames from: ${inputPath}`);
 
     const frameInfo = await extractFrames(inputPath, framesInput, null);
-    console.log(`[AI] Extracted ${frameInfo.frameCount} frames at ${frameInfo.fps.toFixed(1)} FPS`);
+    console.log(`[AI] Extracted ${frameInfo.frameCount} frames at ${frameInfo.fps.toFixed(2)} FPS`);
 
     job.stage = `Extracted ${frameInfo.frameCount} frames`;
-    job.progress = 8;
-
-    // ── Step 2: Extract audio ──
-    job.stage = 'Extracting audio track...';
-    const audioInfo = await extractAudio(inputPath, audioPath);
-    console.log(`[AI] Audio: ${audioInfo.hasAudio ? 'extracted' : 'no audio track'}`);
-
     job.progress = 10;
 
-    // ── Step 3: AI enhancement ──
-    job.stage = `Enhancing frames with AI (0/${frameInfo.frameCount})...`;
-    console.log(`[AI] Starting Real-ESRGAN enhancement (${scale}, ${frameInfo.frameCount} frames)...`);
+    // ── Step 2: AI enhancement ──
+    const gpuInfo = detectedGpu || { id: 0, name: 'Default GPU' };
+    job.stage = `Enhancing frames with AI on ${gpuInfo.name} (0/${frameInfo.frameCount})...`;
+    console.log(`[AI] Starting Real-ESRGAN on GPU ${gpuInfo.id} (${gpuInfo.name}), Scale: ${scale}, ${frameInfo.frameCount} frames...`);
 
     const enhanceResult = await enhanceFrames(
       aiCheck.path,
       framesInput,
       framesOutput,
       scale,
-      job
+      job,
+      gpuInfo.id
     );
     console.log(`[AI] Enhanced ${enhanceResult.enhancedCount}/${enhanceResult.totalFrames} frames`);
 
-    job.stage = 'Rebuilding video from enhanced frames...';
+    job.stage = 'Rebuilding video & muxing audio...';
     job.progress = 88;
 
-    // ── Step 4: Rebuild video ──
+    // ── Step 3: Rebuild video ──
     console.log(`[AI] Rebuilding video: ${outputPath}`);
-    await rebuildVideo(framesOutput, audioInfo, outputPath, frameInfo.fps, formatSettings);
+    await rebuildVideo(framesOutput, inputPath, outputPath, frameInfo.fps, formatSettings);
 
     job.stage = 'Finalizing...';
     job.progress = 98;
@@ -403,17 +400,23 @@ async function processVideoWithAI(job, options) {
     console.log(`[AI] ✅ AI upscale complete: ${outputPath}`);
 
   } finally {
-    // ── Step 5: Cleanup ──
     console.log(`[AI] Cleaning up temp files for job ${jobId}`);
     cleanupTemp(jobId);
   }
 }
 
+// ─── Initialize GPU detection on module load ─────────────────────────
+(async () => {
+  const exePath = findExe(TOOLS_DIR);
+  if (exePath) {
+    detectedGpu = await detectBestGpu(exePath);
+  }
+})();
+
 // ─── Exports ────────────────────────────────────────────────────────
 module.exports = {
   checkAIAvailability,
   extractFrames,
-  extractAudio,
   enhanceFrames,
   rebuildVideo,
   processVideoWithAI,

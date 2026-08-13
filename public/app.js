@@ -58,7 +58,8 @@ async function checkAIStatus() {
         const data = await res.json();
         aiAvailable = data.available;
         if (aiBadge) {
-            aiBadge.textContent = aiAvailable ? 'AI Ready' : 'AI Unavailable';
+            const gpuName = data.gpu ? data.gpu.name : 'GPU';
+            aiBadge.textContent = aiAvailable ? `AI Ready (${gpuName})` : 'AI Unavailable';
             aiBadge.classList.toggle('ai-ready', aiAvailable);
             aiBadge.classList.toggle('ai-off', !aiAvailable);
         }
@@ -119,6 +120,11 @@ document.querySelectorAll('.scale-btn').forEach(btn => {
         document.querySelectorAll('.scale-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         selectedScale = btn.dataset.scale;
+
+        // Auto-enable upscaling when any scale preset button is clicked
+        upscaleOn = true;
+        if (upscaleRow) upscaleRow.classList.add('on');
+        if (upscaleOptions) upscaleOptions.classList.add('show');
     });
 });
 
