@@ -355,9 +355,9 @@ async function processVideoWithAI(job, options) {
   const jobId = path.basename(inputPath, path.extname(inputPath));
   const { jobTempDir, framesInput, framesOutput } = ensureTempDirs(jobId);
 
-  const aiCheck = checkAIAvailability();
+  const aiCheck = await checkAIAvailability();
   if (!aiCheck.available) {
-    throw new Error(`AI upscaler not available: ${aiCheck.reason}`);
+    throw new Error(`AI upscaler not available: ${aiCheck.reason || 'Executable not found'}`);
   }
 
   try {

@@ -42,7 +42,7 @@ const storage = multer.diskStorage({
     }
 });
 
-const ALLOWED_EXTS = ['.dat', '.mp4', '.avi', '.mkv', '.mov', '.flv', '.webm', '.mpeg', '.mpg', '.3gp'];
+const ALLOWED_EXTS = ['.dat', '.mp4', '.avi', '.mkv', '.mov', '.flv', '.webm', '.mpeg', '.mpg', '.3gp', '.vob', '.mp3', '.wav', '.aac', '.flac'];
 
 const upload = multer({
     storage,
@@ -59,6 +59,38 @@ const upload = multer({
 
 // In-memory job tracking
 const jobs = new Map();
+
+// Helper to recover job state from disk if server restarted
+function getOrCreateJob(id) {
+    if (!id) return null;
+    let job = jobs.get(id);
+    if (job) return job;
+
+    try {
+        if (fs.existsSync(UPLOAD_DIR)) {
+            const files = fs.readdirSync(UPLOAD_DIR);
+            const match = files.find(f => path.basename(f, path.extname(f)) === id);
+            if (match) {
+                const inputPath = path.join(UPLOAD_DIR, match);
+                const ext = path.extname(match).toLowerCase();
+                job = {
+                    originalName: match,
+                    inputPath: inputPath,
+                    inputExt: ext,
+                    status: 'uploaded',
+                    progress: 0,
+                    stage: '',
+                };
+                jobs.set(id, job);
+                console.log(`[JobRecovery] Restored job state from disk for ID: ${id}`);
+                return job;
+            }
+        }
+    } catch (e) {
+        console.error('[JobRecovery] Failed to recover job from disk:', e.message);
+    }
+    return null;
+}
 
 // ─── Simple FIFO Job Queue with Concurrency Limiter ──────────────────
 class JobQueue {
@@ -143,7 +175,7 @@ app.post('/api/upload', upload.single('video'), (req, res) => {
 // ─── GET /api/stream/:id ────────────────────────────────────────────
 // Stream the uploaded file back for video preview in the browser
 app.get('/api/stream/:id', (req, res) => {
-    const job = jobs.get(req.params.id);
+    const job = getOrCreateJob(req.params.id);
     if (!job) return res.status(404).json({ error: 'File not found' });
 
     const filePath = job.inputPath;
@@ -196,9 +228,108 @@ app.get('/api/stream/:id', (req, res) => {
     }
 });
 
+// ─── GET /api/preview/:id (Fast H.264 preview stream for legacy .DAT / .VOB / .AVI) ───
+app.get('/api/preview/:id', (req, res) => {
+    const job = getOrCreateJob(req.params.id);
+    if (!job) return res.status(404).json({ error: 'File not found' });
+
+    const tempDir = aiUpscaler.TEMP_DIR || path.join(__dirname, 'temp');
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+
+    const previewPath = path.join(tempDir, `preview_${req.params.id}.mp4`);
+
+    // If preview MP4 already exists, serve directly
+    if (fs.existsSync(previewPath)) {
+        return res.sendFile(previewPath);
+    }
+
+    // For standard web MP4/WebM files, stream source directly
+    if (job.inputExt === '.mp4' || job.inputExt === '.webm') {
+        return res.redirect(`/api/stream/${req.params.id}`);
+    }
+
+    // For legacy formats (.dat, .vob, .avi, .flv, .3gp, .mpeg), generate a fast full-length H.264 MP4 preview
+    console.log(`[Preview] Generating full-length preview MP4 for legacy asset ${req.params.id} (${job.inputExt})...`);
+
+    let cmd = ffmpeg(job.inputPath);
+    if (job.inputExt === '.dat') {
+        cmd = cmd.inputFormat('mpeg');
+    }
+
+    cmd.outputOptions([
+        '-vf', 'scale=640:-2:flags=fast_bilinear',
+        '-c:v', 'libx264',
+        '-preset', 'ultrafast',
+        '-crf', '28',
+        '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac',
+        '-b:a', '128k',
+        '-movflags', '+faststart'
+    ])
+    .output(previewPath)
+    .on('end', () => {
+        console.log(`[Preview] Full MP4 preview generated: ${previewPath}`);
+        res.sendFile(previewPath);
+    })
+    .on('error', (err) => {
+        console.error('[Preview] Fast preview error, falling back to direct stream:', err.message);
+        res.redirect(`/api/stream/${req.params.id}`);
+    })
+    .run();
+});
+
+// ─── POST /api/clear-cache (Purge uploaded temp files & freed disk space) ───
+app.post('/api/clear-cache', (req, res) => {
+    let freedBytes = 0;
+    let fileCount = 0;
+
+    const tempDir = aiUpscaler.TEMP_DIR || path.join(__dirname, 'temp');
+    [UPLOAD_DIR, OUTPUT_DIR, tempDir].forEach(dir => {
+        try {
+            if (!fs.existsSync(dir)) return;
+            const entries = fs.readdirSync(dir);
+            for (const entry of entries) {
+                const fullPath = path.join(dir, entry);
+                try {
+                    const stat = fs.statSync(fullPath);
+                    if (stat.isDirectory()) {
+                        freedBytes += getDirectorySize(fullPath);
+                        fs.rmSync(fullPath, { recursive: true, force: true });
+                        fileCount++;
+                    } else {
+                        freedBytes += stat.size;
+                        fs.unlinkSync(fullPath);
+                        fileCount++;
+                    }
+                } catch (e) { /* ignore locked files */ }
+            }
+        } catch (e) { /* ignore */ }
+    });
+
+    // Clear jobs map
+    jobs.clear();
+
+    console.log(`[Cache] Cleared ${fileCount} files/folders, freed ${freedBytes} bytes`);
+    res.json({ message: 'Cache cleared successfully', freedBytes, fileCount });
+});
+
+function getDirectorySize(dirPath) {
+    let size = 0;
+    try {
+        const files = fs.readdirSync(dirPath);
+        for (const file of files) {
+            const filePath = path.join(dirPath, file);
+            const stat = fs.statSync(filePath);
+            if (stat.isDirectory()) size += getDirectorySize(filePath);
+            else size += stat.size;
+        }
+    } catch (e) {}
+    return size;
+}
+
 // ─── GET /api/probe/:id ─────────────────────────────────────────────
 app.get('/api/probe/:id', (req, res) => {
-    const job = jobs.get(req.params.id);
+    const job = getOrCreateJob(req.params.id);
     if (!job) return res.status(404).json({ error: 'File not found' });
 
     const inputPath = job.inputPath;
@@ -283,6 +414,10 @@ function getCodecSettings(format, quality) {
         '3gp': { vcodec: 'libx264', acodec: 'aac', ext: '.3gp', extraArgs: [] },
         mpeg: { vcodec: 'mpeg2video', acodec: 'mp2', ext: '.mpeg', extraArgs: [] },
         gif: { vcodec: null, acodec: null, ext: '.gif', extraArgs: [] },
+        mp3: { vcodec: null, acodec: 'libmp3lame', ext: '.mp3', extraArgs: ['-b:a', '320k', '-vn'] },
+        wav: { vcodec: null, acodec: 'pcm_s16le', ext: '.wav', extraArgs: ['-vn'] },
+        aac: { vcodec: null, acodec: 'aac', ext: '.aac', extraArgs: ['-b:a', '256k', '-vn'] },
+        flac: { vcodec: null, acodec: 'flac', ext: '.flac', extraArgs: ['-vn'] },
     };
 
     return { ...(formatSettings[format] || formatSettings.mp4), ...q };
@@ -316,32 +451,70 @@ app.post('/api/set-output-path', (req, res) => {
     }
 });
 
+// Helper to discover all available Windows system drives (C:\, D:\, E:\, etc.)
+function getSystemDrives() {
+    if (process.platform !== 'win32') return [];
+    const drives = [];
+    for (let i = 65; i <= 90; i++) {
+        const letter = String.fromCharCode(i);
+        const drivePath = `${letter}:\\`;
+        try {
+            if (fs.existsSync(drivePath)) {
+                drives.push({ name: `${letter}:`, path: drivePath });
+            }
+        } catch (e) {
+            // Ignore inaccessible drive letters
+        }
+    }
+    return drives;
+}
+
 // ─── GET /api/browse-dirs ─────────────────────────────────────────────
 app.get('/api/browse-dirs', (req, res) => {
-    const dirPath = req.query.path || (process.platform === 'win32' ? 'C:\\' : '/');
-    const resolved = path.resolve(dirPath);
+    let dirPath = req.query.path || (process.platform === 'win32' ? 'D:\\' : '/');
+
+    // Handle "ROOT" virtual path for listing drives
+    if (dirPath === 'ROOT' || dirPath === 'COMPUTER' || dirPath === 'This PC') {
+        const drives = getSystemDrives();
+        return res.json({ current: 'This PC', parent: 'ROOT', dirs: [], drives });
+    }
+
+    // Normalize Windows drive paths (e.g. 'D:' -> 'D:\')
+    if (process.platform === 'win32' && /^[A-Z]:$/i.test(dirPath)) {
+        dirPath = dirPath.toUpperCase() + '\\';
+    }
+
+    let resolved = path.resolve(dirPath);
+    if (process.platform === 'win32' && /^[A-Z]:$/i.test(resolved)) {
+        resolved = resolved.toUpperCase() + '\\';
+    }
 
     try {
         if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
             return res.status(400).json({ error: 'Invalid directory path' });
         }
+
         const entries = fs.readdirSync(resolved, { withFileTypes: true });
         const dirs = entries
-            .filter(e => e.isDirectory() && !e.name.startsWith('.'))
+            .filter(e => {
+                try {
+                    return e.isDirectory() && !e.name.startsWith('$') && !e.name.startsWith('.');
+                } catch (err) {
+                    return false;
+                }
+            })
             .map(e => ({ name: e.name, path: path.join(resolved, e.name) }))
-            .sort((a, b) => a.name.localeCompare(b.name));
+            .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 
-        // On Windows, list drive letters at root
-        let drives = [];
-        if (process.platform === 'win32' && (dirPath === 'C:\\' || dirPath === '/')) {
-            const { execSync } = require('child_process');
-            try {
-                const result = execSync('wmic logicaldisk get name', { encoding: 'utf8' });
-                drives = result.split('\n').map(l => l.trim()).filter(l => /^[A-Z]:$/.test(l)).map(d => ({ name: d, path: d + '\\' }));
-            } catch (e) { /* ignore */ }
+        const drives = getSystemDrives();
+
+        // Calculate parent. On Windows, if resolved is a root drive like 'D:\', parent is 'ROOT'
+        let parent = path.dirname(resolved);
+        if (process.platform === 'win32' && (resolved === parent || /^[A-Z]:\\$/i.test(resolved))) {
+            parent = 'ROOT';
         }
 
-        res.json({ current: resolved, parent: path.dirname(resolved), dirs, drives });
+        res.json({ current: resolved, parent, dirs, drives });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -359,10 +532,11 @@ app.post('/api/convert', (req, res) => {
         upscale = false,
         upscaleMode = '2x',
         aiUpscale = false,
+        deinterlace = false,
         outputDir = null
     } = req.body;
 
-    const job = jobs.get(id);
+    const job = getOrCreateJob(id);
     if (!job) return res.status(404).json({ error: 'File not found' });
     if (job.status === 'converting' || job.status === 'queued') {
         return res.status(409).json({ error: 'Conversion already in progress or queued' });
@@ -431,6 +605,7 @@ app.post('/api/convert', (req, res) => {
                     quality, 
                     upscale: isFallback ? true : upscale, 
                     upscaleMode: isFallback ? effectiveScale : upscaleMode, 
+                    deinterlace,
                     settings, 
                     outputPath 
                 });
@@ -524,11 +699,15 @@ function runFFmpegPipeline(job, options) {
             cmd = cmd.inputFormat('mpeg');
         }
 
-        // Handle GIF separately
+        // Handle Audio Extraction or GIF separately
         if (format === 'gif') {
             cmd = cmd
                 .outputOptions(['-vf', 'fps=10,scale=480:-1:flags=lanczos', '-loop', '0'])
                 .toFormat('gif');
+        } else if (settings.vcodec === null) {
+            // Audio extraction mode
+            if (settings.acodec) cmd = cmd.audioCodec(settings.acodec);
+            if (settings.extraArgs.length > 0) cmd = cmd.outputOptions(settings.extraArgs);
         } else {
             // Video codec
             cmd = cmd.videoCodec(settings.vcodec);
@@ -545,6 +724,11 @@ function runFFmpegPipeline(job, options) {
 
             // Build video filter chain
             const vfFilters = [];
+
+            // Deinterlacing filter for old VCD/DVD/VHS rips
+            if (options.deinterlace) {
+                vfFilters.push('yadif=0:-1:0');
+            }
 
             // Resolution scaling
             if (resolution !== 'source') {
@@ -651,7 +835,7 @@ function runFFmpegPipeline(job, options) {
 
 // ─── GET /api/progress/:id ──────────────────────────────────────────
 app.get('/api/progress/:id', (req, res) => {
-    const job = jobs.get(req.params.id);
+    const job = getOrCreateJob(req.params.id);
     if (!job) return res.status(404).json({ error: 'Job not found' });
 
     // Server-Sent Events
@@ -690,11 +874,29 @@ app.get('/api/progress/:id', (req, res) => {
 
 // ─── GET /api/download/:id ──────────────────────────────────────────
 app.get('/api/download/:id', (req, res) => {
-    const job = jobs.get(req.params.id);
+    const job = getOrCreateJob(req.params.id);
     if (!job) return res.status(404).json({ error: 'File not found' });
-    if (job.status !== 'done') return res.status(400).json({ error: 'Conversion not complete' });
 
-    if (!fs.existsSync(job.outputPath)) {
+    // Ensure output file exists, or locate on disk
+    if (!job.outputPath || !fs.existsSync(job.outputPath)) {
+        const searchDirs = [customOutputDir, OUTPUT_DIR].filter(Boolean);
+        for (const dir of searchDirs) {
+            try {
+                if (fs.existsSync(dir)) {
+                    const files = fs.readdirSync(dir);
+                    const match = files.find(f => path.basename(f, path.extname(f)) === req.params.id);
+                    if (match) {
+                        job.outputPath = path.join(dir, match);
+                        job.outputFileName = job.outputFileName || match;
+                        job.status = 'done';
+                        break;
+                    }
+                }
+            } catch (e) { /* ignore */ }
+        }
+    }
+
+    if (!job.outputPath || !fs.existsSync(job.outputPath)) {
         return res.status(404).json({ error: 'Output file not found' });
     }
 

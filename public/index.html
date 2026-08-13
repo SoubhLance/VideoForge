@@ -80,7 +80,7 @@
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
                 </div>
                 <span class="app-name">VideoForge</span>
-                <span class="app-version">v2.1.0</span>
+                <span class="app-version">v1.0.0</span>
                 <div class="menu-bar">
                     <span class="menu-item">File</span>
                     <span class="menu-item">Edit</span>
@@ -101,15 +101,15 @@
             <aside class="sidebar">
                 <div class="sidebar-section">
                     <div class="section-header">WORKSPACE</div>
-                    <div class="sidebar-item active">
+                    <div class="sidebar-item active" data-action="media">
                         <svg class="item-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                         Media
                     </div>
-                    <div class="sidebar-item">
+                    <div class="sidebar-item" data-action="queue">
                         <svg class="item-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                         Queue
                     </div>
-                    <div class="sidebar-item">
+                    <div class="sidebar-item" data-action="presets">
                         <svg class="item-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
                         Presets
                     </div>
@@ -117,11 +117,11 @@
                 
                 <div class="sidebar-section">
                     <div class="section-header">TOOLS</div>
-                    <div class="sidebar-item">
+                    <div class="sidebar-item" data-action="convert">
                         <svg class="item-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
                         Convert
                     </div>
-                    <div class="sidebar-item">
+                    <div class="sidebar-item" data-action="upscale">
                         <svg class="item-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
                         Upscale
                     </div>
@@ -129,11 +129,11 @@
 
                 <div class="sidebar-section">
                     <div class="section-header">LIBRARY</div>
-                    <div class="sidebar-item">
+                    <div class="sidebar-item" data-action="history">
                         <svg class="item-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                         History
                     </div>
-                    <div class="sidebar-item">
+                    <div class="sidebar-item" data-action="recent">
                         <svg class="item-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
                         Recent
                     </div>
@@ -141,7 +141,7 @@
 
                 <div class="sidebar-section system-section">
                     <div class="section-header">SYSTEM</div>
-                    <div class="sidebar-item">
+                    <div class="sidebar-item" data-action="settings">
                         <svg class="item-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                         Settings
                     </div>
@@ -163,7 +163,7 @@
                     </div>
                     <h3>No media imported</h3>
                     <p>Drag & drop video files here or click to import</p>
-                    <button class="import-btn" type="button">Import Media</button>
+                    <button class="import-btn" id="importBtn" type="button">Import Media</button>
                 </div>
 
                 <!-- SELECTED MEDIA WORKSPACE (Visible when a file is uploaded) -->
@@ -244,7 +244,7 @@
                     
                     <!-- Format presetter (Buttons) -->
                     <div class="control-group">
-                        <label class="control-label">CONTAINER FORMAT</label>
+                        <label class="control-label">CONTAINER / FORMAT</label>
                         <div class="format-tabs" id="formatTabs">
                             <button class="fmt-btn active" data-fmt="mp4">MP4</button>
                             <button class="fmt-btn" data-fmt="avi">AVI</button>
@@ -255,6 +255,10 @@
                             <button class="fmt-btn" data-fmt="3gp">3GP</button>
                             <button class="fmt-btn" data-fmt="mpeg">MPEG</button>
                             <button class="fmt-btn" data-fmt="gif">GIF</button>
+                            <button class="fmt-btn fmt-audio" data-fmt="mp3" title="Extract MP3 Audio">🎵 MP3</button>
+                            <button class="fmt-btn fmt-audio" data-fmt="wav" title="Extract Lossless WAV">🔊 WAV</button>
+                            <button class="fmt-btn fmt-audio" data-fmt="aac" title="Extract AAC Audio">🎧 AAC</button>
+                            <button class="fmt-btn fmt-audio" data-fmt="flac" title="Extract Lossless FLAC">🎼 FLAC</button>
                         </div>
                     </div>
 
@@ -281,6 +285,14 @@
                                 <option value="low">Low (smaller file)</option>
                             </select>
                         </div>
+                    </div>
+
+                    <!-- Deinterlacing filter for old VCD/VHS/DVD rips -->
+                    <div class="control-group" style="margin-top: 10px;">
+                        <label class="vf-checkbox-row" style="cursor: pointer;">
+                            <input type="checkbox" id="deinterlaceCheck">
+                            <span>Deinterlace (YADIF 60fps) <small style="color: var(--text-muted);">(Fixes lines on old DAT/VOB/VHS video)</small></span>
+                        </label>
                     </div>
                 </div>
 

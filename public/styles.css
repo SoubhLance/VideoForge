@@ -1591,3 +1591,309 @@ input, button, select, textarea {
 .fb-cancel-btn:hover {
   background: var(--bg-hover);
 }
+
+/* ─── Glow Pulse Highlight Animation ───────────────────────────── */
+@keyframes glowPulse {
+  0% { box-shadow: 0 0 0 0 rgba(230, 126, 34, 0.6); border-color: var(--accent); }
+  50% { box-shadow: 0 0 16px 4px rgba(230, 126, 34, 0.8); border-color: var(--accent-hover); }
+  100% { box-shadow: 0 0 0 0 rgba(230, 126, 34, 0); }
+}
+
+.glow-pulse {
+  animation: glowPulse 1.2s ease-in-out;
+}
+
+/* ─── Workspace Modal Dialog System ────────────────────────────── */
+.vf-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 150ms ease-out;
+}
+
+.vf-modal {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  max-height: 85vh;
+  overflow: hidden;
+  width: 90%;
+}
+
+.vf-modal-sm { max-width: 420px; }
+.vf-modal-md { max-width: 580px; }
+.vf-modal-lg { max-width: 760px; }
+
+.vf-modal-header {
+  height: 48px;
+  background: var(--bg-panel-dark);
+  border-bottom: 1px solid var(--border-default);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+  flex-shrink: 0;
+}
+
+.vf-modal-title {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.vf-modal-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+  border-radius: var(--radius);
+  transition: color var(--transition), background var(--transition);
+}
+
+.vf-modal-close:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.vf-modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.vf-modal-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+}
+
+.vf-modal-footer {
+  padding: 12px 18px;
+  background: var(--bg-panel-dark);
+  border-top: 1px solid var(--border-default);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* ─── Buttons inside Modals ────────────────────────────────────── */
+.vf-btn {
+  padding: 7px 16px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  border: 1px solid transparent;
+}
+
+.vf-btn-primary {
+  background: var(--accent);
+  color: var(--text-inverse);
+}
+.vf-btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.vf-btn-secondary {
+  background: var(--bg-panel-light);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+.vf-btn-secondary:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-hover);
+}
+
+.vf-btn-danger {
+  background: var(--error-surface);
+  border-color: var(--error);
+  color: var(--error);
+}
+.vf-btn-danger:hover {
+  background: var(--error);
+  color: #fff;
+}
+
+.vf-mini-btn {
+  padding: 3px 8px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  background: var(--accent-surface);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.vf-mini-btn:hover {
+  background: var(--accent);
+  color: var(--text-inverse);
+}
+
+/* ─── Presets Modal Grid ───────────────────────────────────────── */
+.vf-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.vf-preset-card {
+  background: var(--bg-panel-light);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius);
+  padding: 14px;
+  cursor: pointer;
+  transition: all var(--transition);
+  position: relative;
+}
+
+.vf-preset-card:hover {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+  transform: translateY(-1px);
+}
+
+.preset-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  font-size: 9px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 2px;
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  border: 1px solid var(--border-default);
+}
+.preset-badge.master { color: var(--accent); border-color: var(--accent); background: var(--accent-surface); }
+.preset-badge.ultra { color: #9b59b6; border-color: #9b59b6; background: rgba(155, 89, 182, 0.1); }
+
+.preset-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.preset-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+/* ─── Modal Tables (History / Recent) ─────────────────────────── */
+.vf-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius);
+}
+
+.vf-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  text-align: left;
+}
+
+.vf-table th {
+  background: var(--bg-panel-dark);
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.vf-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+}
+
+.vf-cell-name {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-empty-cell {
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 24px !important;
+}
+
+/* ─── Settings Panel inside Modal ──────────────────────────────── */
+.vf-settings-group {
+  margin-bottom: 18px;
+}
+
+.vf-status-box {
+  background: var(--bg-panel-dark);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.vf-status-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.status-tag.status-off {
+  color: var(--text-muted);
+  border: 1px solid var(--border-default);
+  background: var(--bg-panel);
+}
+
+.vf-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-primary);
+  margin-top: 6px;
+}
+
+/* Audio Extraction format buttons styling */
+.fmt-btn.fmt-audio {
+  border-color: rgba(39, 174, 96, 0.4);
+  color: #2ecc71;
+}
+
+.fmt-btn.fmt-audio:hover {
+  border-color: #2ecc71;
+  background: rgba(39, 174, 96, 0.15);
+}
+
+.fmt-btn.fmt-audio.active {
+  background: #27ae60;
+  border-color: #27ae60;
+  color: #ffffff;
+}
+

@@ -1,7 +1,14 @@
-# 🎬 VideoForge — Professional Video Processing Workstation
+# 🎬 VideoForge v1.0.0 — Professional Video Processing Workstation
 
-A local-first video conversion and AI upscaling workstation powered by **FFmpeg** and **Real-ESRGAN**. Convert between formats (AVI, DAT, MP4, MKV, etc.), upscale with neural super-resolution, and preview everything in a professional desktop-style UI.
+> Developed by **Soubhik Sadhu** • [GitHub Repository](https://github.com/SoubhLance/VideoForge)
 
+A local-first video conversion and AI upscaling workstation powered by **FFmpeg** and **Real-ESRGAN**. 
+
+VideoForge is specifically designed to transcode and recover **legacy/old video files** (such as `.dat`, `.vob`, `.flv`, `.3gp`, `.avi`, `.mpeg`) that are not natively supported or fail to open in modern video editors like **Adobe Premiere Pro** or **After Effects**. 
+
+VideoForge is completely **free to use** and open source. If you encounter any bugs or want to enhance functionality, feel free to create a pull request or contribute to the project!
+
+![Version](https://img.shields.io/badge/version-1.0.0-orange)
 ![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?logo=node.js&logoColor=white)
 ![FFmpeg](https://img.shields.io/badge/FFmpeg-required-007808?logo=ffmpeg&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-blue)
