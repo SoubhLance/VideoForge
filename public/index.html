@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VideoForge — Professional Video Processing</title>
+    <meta name="description" content="Professional video conversion and AI upscaling workstation. Powered by FFmpeg and Real-ESRGAN.">
+    <!-- Google Fonts: Inter for UI, JetBrains Mono for metadata/console -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <!-- App Startup Loader -->
+    <div id="appLoader" class="app-loader">
+        <div class="loader-content">
+            <div class="loader-logo">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+            </div>
+            <div class="loader-title">VideoForge</div>
+            <div class="loader-status">Initializing workspace...</div>
+            <div class="loader-track">
+                <div class="loader-bar-fill"></div>
+            </div>
+            <div class="loader-details">Loading interface components</div>
+        </div>
+    </div>
+
+    <!-- Script to animate startup check sequentially -->
+    <script>
+        window.addEventListener('DOMContentLoaded', () => {
+            const statusEl = document.querySelector('.loader-status');
+            const barFill = document.querySelector('.loader-bar-fill');
+            const detailsEl = document.querySelector('.loader-details');
+            const loader = document.getElementById('appLoader');
+
+            const steps = [
+                { pct: 15, status: 'Initializing core components...', details: 'Loading layouts & panels' },
+                { pct: 40, status: 'Connecting to FFmpeg engine...', details: 'Scanning command paths' },
+                { pct: 65, status: 'Verifying AI upscale backend...', details: 'Checking Real-ESRGAN portable CLI' },
+                { pct: 85, status: 'Establishing local pipeline...', details: 'Handshaking database & queues' },
+                { pct: 100, status: 'Workspace loaded.', details: 'Launching interface' }
+            ];
+
+            let stepIdx = 0;
+            function runStep() {
+                if (stepIdx >= steps.length) {
+                    setTimeout(() => {
+                        loader.classList.add('fade-out');
+                        setTimeout(() => {
+                            loader.style.display = 'none';
+                        }, 400);
+                    }, 200);
+                    return;
+                }
+
+                const step = steps[stepIdx];
+                statusEl.textContent = step.status;
+                detailsEl.textContent = step.details;
+                barFill.style.width = step.pct + '%';
+
+                stepIdx++;
+                // Add randomized small delays to simulate actual heavy desktop loading sequences
+                setTimeout(runStep, 200 + Math.random() * 150);
+            }
+
+            runStep();
+        });
+    </script>
+
+    <div class="desktop-shell">
+        <!-- TOP APPLICATION BAR -->
+        <header class="title-bar">
+            <div class="title-left">
+                <!-- Understated brand icon -->
+                <div class="app-icon">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                </div>
+                <span class="app-name">VideoForge</span>
+                <span class="app-version">v2.1.0</span>
+                <div class="menu-bar">
+                    <span class="menu-item">File</span>
+                    <span class="menu-item">Edit</span>
+                    <span class="menu-item">Queue</span>
+                    <span class="menu-item">Presets</span>
+                    <span class="menu-item">Help</span>
+                </div>
+            </div>
+            <div class="title-right">
+                <span class="nav-badge engine-badge">FFMPEG STABLE</span>
+                <span class="nav-badge ai-badge" id="aiBadge">Checking AI…</span>
+            </div>
+        </header>
+
+        <!-- MAIN APP WORKSPACE SHELL -->
+        <main class="app-body">
+            <!-- LEFT COMPACT SIDEBAR -->
+            <aside class="sidebar">
+                <div class="sidebar-section">
+                    <div class="section-header">WORKSPACE</div>
+                    <div class="sidebar-item active">
+                        <svg class="item-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                        Media
+                    </div>
+                    <div class="sidebar-item">
+                        <svg class="item-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        Queue
+                    </div>
+                    <div class="sidebar-item">
+                        <svg class="item-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                        Presets
+                    </div>
+                </div>
+                
+                <div class="sidebar-section">
+                    <div class="section-header">TOOLS</div>
+                    <div class="sidebar-item">
+                        <svg class="item-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                        Convert
+                    </div>
+                    <div class="sidebar-item">
+                        <svg class="item-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                        Upscale
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <div class="section-header">LIBRARY</div>
+                    <div class="sidebar-item">
+                        <svg class="item-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                        History
+                    </div>
+                    <div class="sidebar-item">
+                        <svg class="item-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+                        Recent
+                    </div>
+                </div>
+
+                <div class="sidebar-section system-section">
+                    <div class="section-header">SYSTEM</div>
+                    <div class="sidebar-item">
+                        <svg class="item-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                        Settings
+                    </div>
+                </div>
+            </aside>
+
+            <!-- CENTER WORKSPACE -->
+            <section class="workspace">
+                <div class="workspace-header">
+                    <h2>Video Processing Workstation</h2>
+                    <p>Import and transcode assets, apply technical filters, or enhance with neural network tools.</p>
+                </div>
+
+                <!-- EMPTY STATE / FILE IMPORT ZONE -->
+                <div class="drop-zone" id="dropZone">
+                    <input type="file" id="fileInput" accept=".dat,.mp4,.avi,.mkv,.mov,.flv,.webm,.mpeg,.mpg,.3gp">
+                    <div class="drop-icon-box">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    </div>
+                    <h3>No media imported</h3>
+                    <p>Drag & drop video files here or click to import</p>
+                    <button class="import-btn" type="button">Import Media</button>
+                </div>
+
+                <!-- SELECTED MEDIA WORKSPACE (Visible when a file is uploaded) -->
+                <div class="file-info-panel" id="fileInfoPanel">
+                    <!-- Media Assets Table -->
+                    <div class="panel-section">
+                        <div class="panel-title-text">IMPORTED ASSETS</div>
+                        <div class="table-container">
+                            <table class="media-table">
+                                <thead>
+                                    <tr>
+                                        <th>Asset Name</th>
+                                        <th style="width: 100px;">Format</th>
+                                        <th style="width: 110px;">Size</th>
+                                        <th style="width: 100px;">Status</th>
+                                        <th style="width: 60px; text-align: center;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="selected-row">
+                                        <td class="cell-name-column">
+                                            <svg class="table-video-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg>
+                                            <span id="fileName">—</span>
+                                        </td>
+                                        <td>VIDEO FILE</td>
+                                        <td id="fileSize">—</td>
+                                        <td><span class="status-tag status-ready">LOADED</span></td>
+                                        <td style="text-align: center;">
+                                            <button class="file-remove-btn" id="fileRemoveBtn" title="Remove file">✕</button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Metadata details panel -->
+                    <div class="panel-section">
+                        <div class="panel-title-text">ASSET METADATA (PROBE)</div>
+                        <div id="probeInfo">
+                            <!-- Injected dynamically by app.js -->
+                        </div>
+                    </div>
+
+                    <!-- Video Preview Player Monitor -->
+                    <div class="panel-section">
+                        <div class="panel-title-text">PREVIEW MONITOR</div>
+                        <div class="preview-monitor">
+                            <div class="monitor-canvas">
+                                <video id="videoPlayer" style="display:none; width:100%; height:100%; object-fit:contain; background:#000;"></video>
+                                <div class="monitor-overlay" id="monitorOverlay">
+                                    <div class="monitor-icon">
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                    </div>
+                                    <span class="monitor-text">SOURCE PLAYBACK PAUSED</span>
+                                </div>
+                            </div>
+                            <!-- Pro-style timeline scrub bar -->
+                            <div class="monitor-controls">
+                                <button class="monitor-play-btn" id="monitorPlayBtn" type="button">▶</button>
+                                <button class="monitor-pause-btn" id="monitorPauseBtn" type="button" style="display:none;">⏸</button>
+                                <div class="timeline-bar" id="timelineBar">
+                                    <div class="timeline-scrub" id="timelineScrub" style="width: 0%;"></div>
+                                    <div class="timeline-head" id="timelineHead" style="left: 0%;"></div>
+                                </div>
+                                <span class="timecode" id="timecodeEl">00:00:00 / 00:00:00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- RIGHT INSPECTOR (OUTPUT CONFIGURATION PANEL) -->
+            <aside class="inspector">
+                <!-- Section 1: Output Settings -->
+                <div class="inspector-section">
+                    <div class="panel-title-text">EXPORT SETTINGS</div>
+                    
+                    <!-- Format presetter (Buttons) -->
+                    <div class="control-group">
+                        <label class="control-label">CONTAINER FORMAT</label>
+                        <div class="format-tabs" id="formatTabs">
+                            <button class="fmt-btn active" data-fmt="mp4">MP4</button>
+                            <button class="fmt-btn" data-fmt="avi">AVI</button>
+                            <button class="fmt-btn" data-fmt="mkv">MKV</button>
+                            <button class="fmt-btn" data-fmt="mov">MOV</button>
+                            <button class="fmt-btn" data-fmt="webm">WebM</button>
+                            <button class="fmt-btn" data-fmt="flv">FLV</button>
+                            <button class="fmt-btn" data-fmt="3gp">3GP</button>
+                            <button class="fmt-btn" data-fmt="mpeg">MPEG</button>
+                            <button class="fmt-btn" data-fmt="gif">GIF</button>
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <label class="control-label" for="resSelect">OUTPUT RESOLUTION</label>
+                        <div class="select-wrapper">
+                            <select id="resSelect">
+                                <option value="source">Same as source</option>
+                                <option value="3840x2160">3840×2160 (4K)</option>
+                                <option value="2560x1440">2560×1440 (2K)</option>
+                                <option value="1920x1080">1920×1080 (1080p)</option>
+                                <option value="1280x720">1280×720 (720p)</option>
+                                <option value="854x480">854×480 (480p)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <label class="control-label" for="qualSelect">ENCODER PROFILE</label>
+                        <div class="select-wrapper">
+                            <select id="qualSelect">
+                                <option value="high">High (best quality)</option>
+                                <option value="medium" selected>Medium (balanced)</option>
+                                <option value="low">Low (smaller file)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 2: AI Enhancer toggles -->
+                <div class="inspector-section separator-top">
+                    <div class="upscale-row" id="upscaleRow">
+                        <div class="upscale-left">
+                            <span class="custom-checkbox"></span>
+                            <span class="panel-title-text" style="margin: 0; font-size: 11px;">NEURAL SUPER-RESOLUTION</span>
+                        </div>
+                        <div class="toggle" id="toggleEl" style="display:none;"></div> <!-- hidden dummy to prevent app.js toggleEl error -->
+                    </div>
+
+                    <div class="upscale-options" id="upscaleOptions">
+                        <div class="control-group" style="margin-top: 14px;">
+                            <label class="control-label">AI MODEL FILTER</label>
+                            <div class="scale-btn-grid">
+                                <button class="scale-btn active" data-scale="2x">2× Scale</button>
+                                <button class="scale-btn" data-scale="4x">4× Scale</button>
+                                <button class="scale-btn ai-preset" data-scale="ai-enhance">AI Enhance</button>
+                                <button class="scale-btn" data-scale="denoise">Denoise</button>
+                                <button class="scale-btn" data-scale="sharpen">Sharpen</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 3: Output Save Directory and Actions -->
+                <div class="inspector-section separator-top" style="margin-top: auto;">
+                    <div class="control-group">
+                        <label class="control-label">EXPORT PATH</label>
+                        <div class="path-selection-box">
+                            <span class="path-text">/outputs/exports</span>
+                            <button class="path-browse-btn" type="button">Choose…</button>
+                        </div>
+                    </div>
+
+                    <div class="action-buttons-box">
+                        <button class="convert-btn" id="convertBtn" disabled>START EXPORT</button>
+                    </div>
+                </div>
+            </aside>
+        </main>
+
+        <!-- BOTTOM CONSOLE / ENCODE QUEUE MONITOR -->
+        <footer class="footer-bar">
+            <div class="console-tab-header">ENCODE QUEUE</div>
+            
+            <div class="queue-monitor-container">
+                <!-- SSE Progress row -->
+                <div class="progress-wrap" id="progressWrap">
+                    <div class="queue-row">
+                        <div class="q-cell index-col">01</div>
+                        <div class="q-cell name-col">Processing Asset</div>
+                        <div class="q-cell status-col" id="progressStatus">Queued</div>
+                        <div class="q-cell progress-col">
+                            <div class="progress-track">
+                                <div class="progress-bar" id="progressBar"></div>
+                            </div>
+                            <span class="progress-pct" id="progressPct">0%</span>
+                        </div>
+                        <div class="q-cell detail-col" id="progressStage"></div>
+                    </div>
+                </div>
+
+                <!-- Transcode report / Done Box -->
+                <div class="done-box" id="doneBox">
+                    <div class="done-row">
+                        <span class="done-status-badge">SUCCESSFUL</span>
+                        <span class="time-badge" id="timeBadge">—</span>
+                        
+                        <div class="transcode-report-grid">
+                            <div class="report-col">
+                                <div class="report-header-text"><span class="dot input"></span> SOURCE METADATA</div>
+                                <div id="reportInput"></div>
+                            </div>
+                            <div class="report-col">
+                                <div class="report-header-text"><span class="dot output"></span> EXPORTED METADATA</div>
+                                <div id="reportOutput"></div>
+                            </div>
+                        </div>
+
+                        <div class="done-actions-row">
+                            <button class="dl-btn" id="dlBtn">Download File</button>
+                            <button class="new-btn" id="newBtn">Clear Job</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Warnings logs -->
+                <div class="warning-notice" id="warningNotice">
+                    <span class="warning-notice-icon">⚠</span>
+                    <span class="warning-notice-text" id="warningText"></span>
+                </div>
+
+                <!-- Error console logs -->
+                <div class="error-box" id="errorBox">
+                    <span class="error-icon">✕</span>
+                    <span class="error-text" id="errorText"></span>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Application Controller -->
+    <script src="app.js"></script>
+</body>
+
+</html>

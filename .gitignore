@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+
+# Uploaded files (temporary)
+uploads/
+!uploads/.gitkeep
+
+# Converted output files
+outputs/
+!outputs/.gitkeep
+
+# AI pipeline temp frames
+temp/
+!temp/.gitkeep
+
+# Real-ESRGAN binaries and models (large, download via setup-tools.js)
+tools/realesrgan-ncnn-vulkan.exe
+tools/realesrgan-ncnn-vulkan
+tools/models/
+tools/*.dll
+tools/*.jpg
+tools/*.png
+tools/*.mp4
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.swp
+*.swo
+*~
+
+# IDE / Editor
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
