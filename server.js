@@ -289,16 +289,16 @@ app.get('/api/preview/:id', (req, res) => {
         '-b:a', '96k',
         '-movflags', '+faststart'
     ])
-    .output(previewPath)
-    .on('end', () => {
-        console.log(`[Preview] Fast MP4 preview clip generated: ${previewPath}`);
-        res.sendFile(previewPath);
-    })
-    .on('error', (err) => {
-        console.error('[Preview] Fast preview error, falling back to direct stream:', err.message);
-        res.redirect(`/api/stream/${req.params.id}`);
-    })
-    .run();
+        .output(previewPath)
+        .on('end', () => {
+            console.log(`[Preview] Fast MP4 preview clip generated: ${previewPath}`);
+            res.sendFile(previewPath);
+        })
+        .on('error', (err) => {
+            console.error('[Preview] Fast preview error, falling back to direct stream:', err.message);
+            res.redirect(`/api/stream/${req.params.id}`);
+        })
+        .run();
 });
 
 // ─── POST /api/clear-cache (Purge uploaded temp files & freed disk space) ───
@@ -346,7 +346,7 @@ function getDirectorySize(dirPath) {
             if (stat.isDirectory()) size += getDirectorySize(filePath);
             else size += stat.size;
         }
-    } catch (e) {}
+    } catch (e) { }
     return size;
 }
 
@@ -532,10 +532,10 @@ app.get('/api/browse-dirs', (req, res) => {
             .filter(e => {
                 try {
                     const lowName = e.name.toLowerCase();
-                    return e.isDirectory() && 
-                           !e.name.startsWith('$') && 
-                           !e.name.startsWith('.') &&
-                           !RESTRICTED_SYSTEM_DIRS.includes(lowName);
+                    return e.isDirectory() &&
+                        !e.name.startsWith('$') &&
+                        !e.name.startsWith('.') &&
+                        !RESTRICTED_SYSTEM_DIRS.includes(lowName);
                 } catch (err) {
                     return false;
                 }
@@ -671,15 +671,15 @@ app.post('/api/convert', (req, res) => {
             job.status = 'converting';
             job.stage = 'Starting FFmpeg pipeline...';
             try {
-                await runFFmpegPipeline(job, { 
-                    format, 
-                    resolution, 
-                    quality, 
-                    upscale: isFallback ? true : upscale, 
-                    upscaleMode: isFallback ? effectiveScale : upscaleMode, 
+                await runFFmpegPipeline(job, {
+                    format,
+                    resolution,
+                    quality,
+                    upscale: isFallback ? true : upscale,
+                    upscaleMode: isFallback ? effectiveScale : upscaleMode,
                     deinterlace,
-                    settings, 
-                    outputPath 
+                    settings,
+                    outputPath
                 });
             } catch (err) {
                 console.error(`[Convert] FFmpeg pipeline error for job ${id}:`, err.message);
@@ -1018,7 +1018,7 @@ setInterval(() => {
             if (!fs.existsSync(dir)) return;
             fs.readdirSync(dir).forEach(file => {
                 const filePath = path.join(dir, file);
-                
+
                 // Do not delete files that belong to an active or queued job
                 if (isFileInActiveJob(filePath)) return;
 
