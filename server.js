@@ -565,10 +565,18 @@ const VALID_QUALITIES = ['high', 'medium', 'low'];
 const VALID_RESOLUTIONS = ['source', '3840x2160', '2560x1440', '1920x1080', '1280x720', '854x480'];
 const VALID_UPSCALE_MODES = ['2x', '4x', 'ai-enhance', 'denoise', 'sharpen'];
 
+function sanitizeFilename(name, fallback) {
+    if (!name || typeof name !== 'string') return fallback;
+    let clean = name.replace(/[\\/:*?"<>|]/g, '_').trim();
+    clean = clean.replace(/^[.\s]+|[.\s]+$/g, '');
+    return clean || fallback;
+}
+
 app.post('/api/convert', (req, res) => {
     const {
         id,
         format = 'mp4',
+        outputName = null,
         resolution = 'source',
         quality = 'medium',
         upscale = false,
@@ -599,8 +607,8 @@ app.post('/api/convert', (req, res) => {
     }
 
     const settings = getCodecSettings(format, quality);
-    const baseName = path.basename(job.originalName, path.extname(job.originalName));
-    const outputFileName = `${baseName}_converted${settings.ext}`;
+    const defaultBaseName = path.basename(job.originalName, path.extname(job.originalName));
+    const finalBaseName = sanitizeFilename(outputName, defaultBaseName);
 
     // Use custom output dir if set, otherwise default
     const effectiveOutputDir = outputDir || customOutputDir || OUTPUT_DIR;
@@ -612,7 +620,15 @@ app.post('/api/convert', (req, res) => {
         return res.status(400).json({ error: `Cannot create output directory: ${e.message}` });
     }
 
-    const outputPath = path.join(effectiveOutputDir, `${id}${settings.ext}`);
+    let outputFileName = `${finalBaseName}${settings.ext}`;
+    let outputPath = path.join(effectiveOutputDir, outputFileName);
+
+    let counter = 1;
+    while (fs.existsSync(outputPath) && isFileInActiveJob(outputPath)) {
+        outputFileName = `${finalBaseName}_${counter}${settings.ext}`;
+        outputPath = path.join(effectiveOutputDir, outputFileName);
+        counter++;
+    }
 
     job.status = 'queued';
     job.progress = 0;
@@ -755,7 +771,7 @@ function runFFmpegPipeline(job, options) {
         const { format, resolution, quality, upscale, upscaleMode, settings, outputPath } = options;
 
         // Build FFmpeg command
-        let cmd = ffmpeg(job.inputPath);
+        let cmd = ffmpeg(job.inputPath).outputOptions('-y');
 
         // For .dat files, force MPEG input format
         if (job.inputExt === '.dat') {

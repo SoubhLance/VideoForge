@@ -10,64 +10,77 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
     <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
     <!-- App Startup Loader -->
     <div id="appLoader" class="app-loader">
-        <div class="loader-content">
-            <div class="loader-logo">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-            </div>
-            <div class="loader-title">VideoForge</div>
-            <div class="loader-status">Initializing workspace...</div>
-            <div class="loader-track">
-                <div class="loader-bar-fill"></div>
-            </div>
-            <div class="loader-details">Loading interface components</div>
-        </div>
+        <video id="startupVideo" class="loader-video" autoplay playsinline preload="auto">
+            <source src="loading.mp4" type="video/mp4">
+        </video>
     </div>
 
-    <!-- Script to animate startup check sequentially -->
+    <!-- Startup Loading Screen Handler -->
     <script>
         window.addEventListener('DOMContentLoaded', () => {
-            const statusEl = document.querySelector('.loader-status');
-            const barFill = document.querySelector('.loader-bar-fill');
-            const detailsEl = document.querySelector('.loader-details');
             const loader = document.getElementById('appLoader');
+            const video = document.getElementById('startupVideo');
+            let isDismissed = false;
+            let videoEnded = false;
+            let pageLoaded = false;
 
-            const steps = [
-                { pct: 15, status: 'Initializing core components...', details: 'Loading layouts & panels' },
-                { pct: 40, status: 'Connecting to FFmpeg engine...', details: 'Scanning command paths' },
-                { pct: 65, status: 'Verifying AI upscale backend...', details: 'Checking Real-ESRGAN portable CLI' },
-                { pct: 85, status: 'Establishing local pipeline...', details: 'Handshaking database & queues' },
-                { pct: 100, status: 'Workspace loaded.', details: 'Launching interface' }
-            ];
-
-            let stepIdx = 0;
-            function runStep() {
-                if (stepIdx >= steps.length) {
-                    setTimeout(() => {
-                        loader.classList.add('fade-out');
-                        setTimeout(() => {
-                            loader.style.display = 'none';
-                        }, 400);
-                    }, 200);
-                    return;
+            function checkAndDismiss() {
+                // Only dismiss once BOTH the full video has finished playing AND the page is loaded
+                if (videoEnded && pageLoaded) {
+                    dismissLoader();
                 }
-
-                const step = steps[stepIdx];
-                statusEl.textContent = step.status;
-                detailsEl.textContent = step.details;
-                barFill.style.width = step.pct + '%';
-
-                stepIdx++;
-                // Add randomized small delays to simulate actual heavy desktop loading sequences
-                setTimeout(runStep, 200 + Math.random() * 150);
             }
 
-            runStep();
+            function dismissLoader() {
+                if (isDismissed) return;
+                isDismissed = true;
+                if (loader) {
+                    loader.classList.add('fade-out');
+                    setTimeout(() => {
+                        loader.style.display = 'none';
+                    }, 500);
+                }
+            }
+
+            if (video) {
+                video.muted = false; // Enable audio with sound
+                video.volume = 1.0;
+
+                const playPromise = video.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch((err) => {
+                        console.warn('Unmuted autoplay prevented by browser policy, trying muted fallback:', err);
+                        video.muted = true;
+                        video.play().catch(() => {});
+                    });
+                }
+
+                // When full video finishes playing
+                video.addEventListener('ended', () => {
+                    videoEnded = true;
+                    checkAndDismiss();
+                });
+
+                video.addEventListener('error', () => {
+                    videoEnded = true;
+                    pageLoaded = true;
+                    dismissLoader();
+                });
+            } else {
+                videoEnded = true;
+            }
+
+            window.addEventListener('load', () => {
+                pageLoaded = true;
+                checkAndDismiss();
+            });
         });
     </script>
 
@@ -77,7 +90,7 @@
             <div class="title-left">
                 <!-- Understated brand icon -->
                 <div class="app-icon">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                    <img src="logo.png" alt="VideoForge Logo" class="brand-logo-img">
                 </div>
                 <span class="app-name">VideoForge</span>
                 <span class="app-version">v1.0.0</span>
@@ -322,6 +335,13 @@
 
                 <!-- Section 3: Output Save Directory and Actions -->
                 <div class="inspector-section separator-top" style="margin-top: auto;">
+                    <div class="control-group">
+                        <label class="control-label" for="outputNameInput">OUTPUT FILENAME</label>
+                        <div class="input-wrapper">
+                            <input type="text" id="outputNameInput" class="vf-input" placeholder="Output filename" autocomplete="off" spellcheck="false">
+                        </div>
+                    </div>
+
                     <div class="control-group">
                         <label class="control-label">EXPORT PATH</label>
                         <div class="path-selection-box">

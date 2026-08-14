@@ -474,6 +474,16 @@ function formatDuration(seconds) {
     return `${sec}s`;
 }
 
+let currentOriginalBaseName = '';
+
+function sanitizeOutputName(name, fallbackName = 'output') {
+    if (!name || typeof name !== 'string') return fallbackName;
+    let clean = name.replace(/[\\/:*?"<>|]/g, '_').trim();
+    clean = clean.replace(/^[.\s]+|[.\s]+$/g, '');
+    if (!clean) return fallbackName;
+    return clean;
+}
+
 // ─── Upload File ────────────────────────────────────────────
 async function uploadFile(file) {
     resetUI();
@@ -481,6 +491,16 @@ async function uploadFile(file) {
     fileSizeEl.textContent = formatBytes(file.size);
     fileInfoPanel.classList.add('show');
     dropZone.style.display = 'none';
+
+    // Auto-populate Output Name input with original filename without extension
+    const lastDotIndex = file.name.lastIndexOf('.');
+    const baseName = lastDotIndex > 0 ? file.name.substring(0, lastDotIndex) : file.name;
+    currentOriginalBaseName = baseName;
+
+    const outputNameInput = document.getElementById('outputNameInput');
+    if (outputNameInput) {
+        outputNameInput.value = baseName;
+    }
 
     // Setup video preview with the local file
     setupVideoPreview(file);
@@ -608,10 +628,16 @@ async function startConvert() {
     const isAIUpscale = upscaleOn && (selectedScale === '2x' || selectedScale === '4x' || selectedScale === 'ai-enhance');
     const deinterlaceChecked = document.getElementById('deinterlaceCheck')?.checked || false;
 
+    // Get and sanitize custom output name
+    const outputNameInput = document.getElementById('outputNameInput');
+    const userSpecifiedName = outputNameInput ? outputNameInput.value : '';
+    const sanitizedName = sanitizeOutputName(userSpecifiedName, currentOriginalBaseName || 'video');
+
     try {
         const body = {
             id: currentFileId,
             format: selectedFormat,
+            outputName: sanitizedName,
             resolution: document.getElementById('resSelect').value,
             quality: document.getElementById('qualSelect').value,
             upscale: upscaleOn,

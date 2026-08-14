@@ -96,6 +96,14 @@ input, button, select, textarea {
   color: var(--accent);
   display: flex;
   align-items: center;
+  justify-content: center;
+}
+
+.brand-logo-img {
+  height: 20px;
+  width: auto;
+  object-fit: contain;
+  display: block;
 }
 
 .app-name {
@@ -608,6 +616,29 @@ input, button, select, textarea {
   font-weight: 700;
   color: var(--text-muted);
   letter-spacing: 0.08em;
+}
+
+/* Input element styling */
+.input-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.vf-input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  font-size: 12px;
+  font-family: var(--font-sans);
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color var(--transition);
+}
+
+.vf-input:focus {
+  border-color: var(--accent);
 }
 
 /* Select element styling */
@@ -1895,5 +1926,37 @@ input, button, select, textarea {
   background: #27ae60;
   border-color: #27ae60;
   color: #ffffff;
+}
+
+/* ─── Startup Video Loading Screen Overlay ─────────────────────── */
+.app-loader {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: #0b0b0b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999999;
+  overflow: hidden;
+  transition: opacity 500ms ease-in-out, visibility 500ms ease-in-out;
+}
+
+.app-loader.fade-out {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.loader-video {
+  width: 85%;
+  height: 85%;
+  max-width: 85vw;
+  max-height: 85vh;
+  object-fit: contain;
+  background-color: transparent;
+  display: block;
 }
 
