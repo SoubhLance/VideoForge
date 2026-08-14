@@ -17,13 +17,14 @@ VideoForge is completely **free to use** and open source. If you encounter any b
 
 ## ✨ Features
 
-- **Format Conversion** — Convert between MP4, AVI, MKV, MOV, WebM, FLV, 3GP, MPEG, GIF, and legacy DAT (VCD) files
+- **Format Conversion** — Convert between MP4, AVI, MKV, MOV, WebM, FLV, 3GP, MPEG, GIF, audio extractions (MP3, WAV, AAC, FLAC), and legacy DAT (VCD) / VOB (DVD) files
 - **AI Upscaling** — Neural super-resolution via Real-ESRGAN (2×, 4×, AI Enhance)
+- **Enhancement Filters** — FFmpeg-powered noise reduction (`nlmeans`) and edge sharpening (`unsharp`)
 - **FFmpeg Fallback** — Lanczos upscaling + sharpening when AI tools are unavailable
 - **Video Preview** — Built-in video player with timeline scrubbing and timecode display
 - **File Browser** — Native-style folder browser to choose output directories
 - **Encode Queue** — FIFO job queue with real-time SSE progress tracking
-- **Presets** — One-click presets for Web (720p), High Quality (1080p), 4K Master, GIF, and Archive
+- **Presets** — One-click presets for Web (720p), High Quality (1080p), 4K Master, GIF, Archive, and Audio extractions
 - **Keyboard Shortcuts** — `Ctrl+O` Import, `Ctrl+E` Export, `Ctrl+N` Clear workspace
 - **Metadata Probe** — FFprobe integration showing codec, resolution, FPS, bitrate, and more
 - **Professional UI** — Dark-themed desktop application layout with sidebar, inspector panel, and encode queue monitor
@@ -36,7 +37,7 @@ VideoForge is completely **free to use** and open source. If you encounter any b
 |------|----------|-------|
 | **Node.js** | ✅ v18+ | [Download](https://nodejs.org/) |
 | **FFmpeg** | ✅ | Must be in your system `PATH`. [Download](https://ffmpeg.org/download.html) |
-| **Real-ESRGAN** | Optional | For AI upscaling. Auto-installed via `node setup-tools.js` |
+| **Real-ESRGAN** | Optional | For AI upscaling. Portable binary setup via `node setup-tools.js` (Windows) |
 
 ---
 
@@ -50,7 +51,7 @@ cd VideoForge
 # 2. Install dependencies
 npm install
 
-# 3. (Optional) Install AI upscaling tools
+# 3. (Optional) Install AI upscaling tools (Windows)
 node setup-tools.js
 
 # 4. Start the server
@@ -95,28 +96,28 @@ Click **Choose…** in the Export Settings panel to browse and select any output
 
 ### Quality Presets
 
-| Preset | CRF | Audio Bitrate | Encode Speed |
-|--------|-----|---------------|--------------|
-| **High** | 18 | 192 kbps | Medium |
-| **Medium** | 23 | 128 kbps | Fast |
-| **Low** | 28 | 96 kbps | Very Fast |
+| Preset | CRF (H.264) | VP9 CRF | MPEG Quality | Audio Bitrate | Encode Speed |
+|--------|-------------|---------|--------------|---------------|--------------|
+| **High** | 18 | 25 | qscale: 2 | 192 kbps | Medium |
+| **Medium** | 23 | 31 | qscale: 5 | 128 kbps | Fast |
+| **Low** | 28 | 38 | qscale: 8 | 96 kbps | Very Fast |
 
 ---
 
-## 🤖 AI Upscaling
+## 🤖 AI Upscaling & Enhancement
 
 VideoForge supports GPU-accelerated upscaling via **Real-ESRGAN NCNN Vulkan**:
 
-1. Run `node setup-tools.js` to auto-download the portable binary and models
+1. Run `node setup-tools.js` to download the portable binary and models
 2. Enable **Neural Super-Resolution** in the Export Settings panel
-3. Choose a scale mode:
-   - **2× Scale** — Double resolution
-   - **4× Scale** — Quadruple resolution
-   - **AI Enhance** — 4× scale with enhanced detail recovery
-   - **Denoise** — Noise reduction filter
-   - **Sharpen** — Edge enhancement
+3. Choose a mode:
+   - **2× Scale** — Double resolution (Real-ESRGAN)
+   - **4× Scale** — Quadruple resolution (Real-ESRGAN)
+   - **AI Enhance** — 4× scale with enhanced detail recovery (Real-ESRGAN)
+   - **Denoise** — Optimized noise reduction filter (`nlmeans`)
+   - **Sharpen** — Unsharp mask filter (`unsharp`)
 
-> **Note:** AI upscaling requires a Vulkan-compatible GPU. If Real-ESRGAN is unavailable, VideoForge automatically falls back to FFmpeg Lanczos upscaling with sharpening.
+> **Note:** AI upscaling requires a Vulkan-compatible GPU. If Real-ESRGAN is unavailable, VideoForge automatically falls back to high-quality FFmpeg Lanczos upscaling.
 
 ---
 
@@ -150,12 +151,12 @@ VideoForge supports GPU-accelerated upscaling via **Real-ESRGAN NCNN Vulkan**:
 ## 📝 Supported Formats
 
 ### Input
-`.mp4` `.avi` `.mkv` `.mov` `.flv` `.webm` `.mpeg` `.mpg` `.3gp` `.dat`
+`.mp4` `.avi` `.mkv` `.mov` `.flv` `.webm` `.mpeg` `.mpg` `.3gp` `.dat` `.vob` `.mp3` `.wav` `.aac` `.flac`
 
 ### Output
-`MP4` `AVI` `MKV` `MOV` `WebM` `FLV` `3GP` `MPEG` `GIF`
+`MP4` `AVI` `MKV` `MOV` `WebM` `FLV` `3GP` `MPEG` `GIF` `MP3` `WAV` `AAC` `FLAC`
 
-> **DAT files** (VCD/SVCD) are auto-detected and decoded as MPEG streams.
+> **DAT / VOB files** (VCD/DVD) are auto-detected and decoded as raw video/audio streams.
 
 ---
 

@@ -39,6 +39,14 @@ async function main() {
   console.log('\n🔧 VideoForge — Tool Setup\n');
   console.log('━'.repeat(50));
 
+  if (process.platform !== 'win32') {
+    console.log('ℹ️  Automated downloader currently defaults to Windows portable Real-ESRGAN binary.');
+    console.log('   For Linux or macOS, please download the platform binary from:');
+    console.log('   https://github.com/xinntao/Real-ESRGAN/releases');
+    console.error(`   Place the executable into: ${TOOLS_DIR}\n`);
+    process.exit(0);
+  }
+
   // Create tools directory
   if (!fs.existsSync(TOOLS_DIR)) {
     fs.mkdirSync(TOOLS_DIR, { recursive: true });

@@ -49,16 +49,37 @@ const upload = multer({
     limits: { fileSize: 4 * 1024 * 1024 * 1024 }, // 4 GB
     fileFilter: (req, file, cb) => {
         const ext = path.extname(file.originalname).toLowerCase();
-        if (ALLOWED_EXTS.includes(ext)) {
-            cb(null, true);
-        } else {
-            cb(new Error(`Unsupported format: ${ext}. Supported: ${ALLOWED_EXTS.join(', ')}`));
+        if (!ALLOWED_EXTS.includes(ext)) {
+            return cb(new Error(`Unsupported format: ${ext}. Supported: ${ALLOWED_EXTS.join(', ')}`));
         }
+
+        // Validate basic MIME type prefix if present
+        if (file.mimetype) {
+            const isVideo = file.mimetype.startsWith('video/');
+            const isAudio = file.mimetype.startsWith('audio/');
+            const isOctet = file.mimetype === 'application/octet-stream'; // Common for .dat / raw formats
+            if (!isVideo && !isAudio && !isOctet) {
+                return cb(new Error(`Invalid MIME type '${file.mimetype}' for file '${file.originalname}'`));
+            }
+        }
+
+        cb(null, true);
     }
 });
 
 // In-memory job tracking
 const jobs = new Map();
+
+// Helper to check if a file path is associated with any active or queued job
+function isFileInActiveJob(filePath) {
+    for (const job of jobs.values()) {
+        if ((job.status === 'converting' || job.status === 'queued' || job.status === 'uploaded') &&
+            (job.inputPath === filePath || job.outputPath === filePath)) {
+            return true;
+        }
+    }
+    return false;
+}
 
 // Helper to recover job state from disk if server restarted
 function getOrCreateJob(id) {
@@ -248,8 +269,8 @@ app.get('/api/preview/:id', (req, res) => {
         return res.redirect(`/api/stream/${req.params.id}`);
     }
 
-    // For legacy formats (.dat, .vob, .avi, .flv, .3gp, .mpeg), generate a fast full-length H.264 MP4 preview
-    console.log(`[Preview] Generating full-length preview MP4 for legacy asset ${req.params.id} (${job.inputExt})...`);
+    // For legacy formats (.dat, .vob, .avi, .flv, .3gp, .mpeg), generate a fast 15-second H.264 MP4 preview clip
+    console.log(`[Preview] Generating fast preview clip for legacy asset ${req.params.id} (${job.inputExt})...`);
 
     let cmd = ffmpeg(job.inputPath);
     if (job.inputExt === '.dat') {
@@ -257,18 +278,20 @@ app.get('/api/preview/:id', (req, res) => {
     }
 
     cmd.outputOptions([
+        '-ss', '0',
+        '-t', '15',
         '-vf', 'scale=640:-2:flags=fast_bilinear',
         '-c:v', 'libx264',
         '-preset', 'ultrafast',
         '-crf', '28',
         '-pix_fmt', 'yuv420p',
         '-c:a', 'aac',
-        '-b:a', '128k',
+        '-b:a', '96k',
         '-movflags', '+faststart'
     ])
     .output(previewPath)
     .on('end', () => {
-        console.log(`[Preview] Full MP4 preview generated: ${previewPath}`);
+        console.log(`[Preview] Fast MP4 preview clip generated: ${previewPath}`);
         res.sendFile(previewPath);
     })
     .on('error', (err) => {
@@ -334,12 +357,10 @@ app.get('/api/probe/:id', (req, res) => {
 
     const inputPath = job.inputPath;
 
-    // For .dat files, treat as MPEG stream
-    const probeInput = job.inputExt === '.dat' ? inputPath : inputPath;
-
-    ffmpeg.ffprobe(probeInput, (err, metadata) => {
+    ffmpeg.ffprobe(inputPath, (err, metadata) => {
         if (err) {
-            return res.status(500).json({ error: 'Failed to probe file', details: err.message });
+            console.error(`[ProbeError] Failed to probe file ${req.params.id}:`, err.message);
+            return res.status(500).json({ error: 'Failed to analyze video file metadata.' });
         }
 
         const videoStream = metadata.streams.find(s => s.codec_type === 'video');
@@ -397,9 +418,9 @@ app.get('/api/ai-status', async (req, res) => {
 // ─── Codec/format mappings ──────────────────────────────────────────
 function getCodecSettings(format, quality) {
     const qualityMap = {
-        high: { crf: 18, audioBitrate: '192k', preset: 'medium' },
-        medium: { crf: 23, audioBitrate: '128k', preset: 'fast' },
-        low: { crf: 28, audioBitrate: '96k', preset: 'veryfast' },
+        high: { crf: 18, vp9Crf: 25, mpegQ: 2, audioBitrate: '192k', preset: 'medium' },
+        medium: { crf: 23, vp9Crf: 31, mpegQ: 5, audioBitrate: '128k', preset: 'fast' },
+        low: { crf: 28, vp9Crf: 38, mpegQ: 8, audioBitrate: '96k', preset: 'veryfast' },
     };
 
     const q = qualityMap[quality] || qualityMap.medium;
@@ -469,6 +490,12 @@ function getSystemDrives() {
     return drives;
 }
 
+// Restricted system paths that shouldn't be browsable
+const RESTRICTED_SYSTEM_DIRS = [
+    'windows', 'system32', 'syswow64', 'program files', 'program files (x86)',
+    '$recycle.bin', 'system volume information'
+];
+
 // ─── GET /api/browse-dirs ─────────────────────────────────────────────
 app.get('/api/browse-dirs', (req, res) => {
     let dirPath = req.query.path || (process.platform === 'win32' ? 'D:\\' : '/');
@@ -489,6 +516,12 @@ app.get('/api/browse-dirs', (req, res) => {
         resolved = resolved.toUpperCase() + '\\';
     }
 
+    // Check system directory restrictions
+    const baseDirName = path.basename(resolved).toLowerCase();
+    if (RESTRICTED_SYSTEM_DIRS.includes(baseDirName)) {
+        return res.status(403).json({ error: 'Access to system directories is restricted for safety' });
+    }
+
     try {
         if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
             return res.status(400).json({ error: 'Invalid directory path' });
@@ -498,7 +531,11 @@ app.get('/api/browse-dirs', (req, res) => {
         const dirs = entries
             .filter(e => {
                 try {
-                    return e.isDirectory() && !e.name.startsWith('$') && !e.name.startsWith('.');
+                    const lowName = e.name.toLowerCase();
+                    return e.isDirectory() && 
+                           !e.name.startsWith('$') && 
+                           !e.name.startsWith('.') &&
+                           !RESTRICTED_SYSTEM_DIRS.includes(lowName);
                 } catch (err) {
                     return false;
                 }
@@ -523,6 +560,11 @@ app.get('/api/browse-dirs', (req, res) => {
 // ─── POST /api/convert ──────────────────────────────────────────────
 let customOutputDir = null;
 
+const VALID_FORMATS = ['mp4', 'avi', 'mkv', 'mov', 'webm', 'flv', '3gp', 'mpeg', 'gif', 'mp3', 'wav', 'aac', 'flac'];
+const VALID_QUALITIES = ['high', 'medium', 'low'];
+const VALID_RESOLUTIONS = ['source', '3840x2160', '2560x1440', '1920x1080', '1280x720', '854x480'];
+const VALID_UPSCALE_MODES = ['2x', '4x', 'ai-enhance', 'denoise', 'sharpen'];
+
 app.post('/api/convert', (req, res) => {
     const {
         id,
@@ -535,6 +577,20 @@ app.post('/api/convert', (req, res) => {
         deinterlace = false,
         outputDir = null
     } = req.body;
+
+    // Validate parameters
+    if (!VALID_FORMATS.includes(format)) {
+        return res.status(400).json({ error: `Invalid format '${format}'. Valid: ${VALID_FORMATS.join(', ')}` });
+    }
+    if (!VALID_QUALITIES.includes(quality)) {
+        return res.status(400).json({ error: `Invalid quality '${quality}'` });
+    }
+    if (!VALID_RESOLUTIONS.includes(resolution)) {
+        return res.status(400).json({ error: `Invalid resolution '${resolution}'` });
+    }
+    if (!VALID_UPSCALE_MODES.includes(upscaleMode)) {
+        return res.status(400).json({ error: `Invalid upscale mode '${upscaleMode}'` });
+    }
 
     const job = getOrCreateJob(id);
     if (!job) return res.status(404).json({ error: 'File not found' });
@@ -582,7 +638,7 @@ app.post('/api/convert', (req, res) => {
             } catch (err) {
                 console.error(`[Convert] AI pipeline error for job ${id}:`, err.message);
                 job.status = 'error';
-                job.error = err.message;
+                job.error = job.error || err.message || 'AI upscaling encountered an error during processing.';
                 job.stage = 'Error';
             }
         });
@@ -612,7 +668,7 @@ app.post('/api/convert', (req, res) => {
             } catch (err) {
                 console.error(`[Convert] FFmpeg pipeline error for job ${id}:`, err.message);
                 job.status = 'error';
-                job.error = err.message;
+                job.error = job.error || err.message || 'Video processing failed during encoding.';
                 job.stage = 'Error';
             }
         });
@@ -670,19 +726,26 @@ async function runAIPipeline(job, options) {
         console.error('[AI Pipeline] Error:', err.message);
         // Fallback to FFmpeg upscale
         console.log('[AI Pipeline] Falling back to FFmpeg upscale...');
-        job.warning = `AI upscale failed: ${err.message}. Used FFmpeg upscale instead.`;
+        job.warning = `AI upscale process encountered an issue. Used FFmpeg high-quality upscale fallback instead.`;
         job.progress = 0;
         job.stage = 'Falling back to FFmpeg upscale...';
 
-        runFFmpegPipeline(job, {
-            format: options.format,
-            resolution: 'source',
-            quality: options.quality,
-            upscale: true,
-            upscaleMode: options.scale,
-            settings: options.settings,
-            outputPath: options.outputPath
-        });
+        try {
+            await runFFmpegPipeline(job, {
+                format: options.format,
+                resolution: 'source',
+                quality: options.quality,
+                upscale: true,
+                upscaleMode: options.scale,
+                settings: options.settings,
+                outputPath: options.outputPath
+            });
+        } catch (fallbackErr) {
+            console.error('[AI Pipeline Fallback] Error:', fallbackErr.message);
+            job.status = 'error';
+            job.error = 'Both AI upscale and FFmpeg fallback pipeline failed.';
+            job.stage = 'Error';
+        }
     }
 }
 
@@ -713,13 +776,18 @@ function runFFmpegPipeline(job, options) {
             cmd = cmd.videoCodec(settings.vcodec);
 
             // Audio codec
-            cmd = cmd.audioCodec(settings.acodec).audioBitrate(settings.audioBitrate);
+            cmd = cmd.audioCodec(settings.acodec);
+            if (settings.audioBitrate && format !== '3gp') {
+                cmd = cmd.audioBitrate(settings.audioBitrate);
+            }
 
-            // Quality (CRF for x264/x265) and speed Preset
+            // Quality options
             if (settings.vcodec === 'libx264' || settings.vcodec === 'libx265') {
                 cmd = cmd.outputOptions([`-crf`, `${settings.crf}`, `-preset`, `${settings.preset || 'medium'}`]);
             } else if (settings.vcodec === 'libvpx-vp9') {
-                cmd = cmd.outputOptions([`-crf`, `${settings.crf}`, '-b:v', '0']);
+                cmd = cmd.outputOptions([`-crf`, `${settings.vp9Crf || 31}`, '-b:v', '0']);
+            } else if (settings.vcodec === 'mpeg2video') {
+                cmd = cmd.outputOptions([`-q:v`, `${settings.mpegQ || 5}`]);
             }
 
             // Build video filter chain
@@ -755,7 +823,7 @@ function runFFmpegPipeline(job, options) {
                     vfFilters.push('unsharp=7:7:1.5:7:7:0.8');
                 }
                 if (upscaleMode === 'denoise') {
-                    vfFilters.push('nlmeans=s=3:p=7:r=15');
+                    vfFilters.push('hqdn3d=4:3:6:4.5');
                 }
                 if (upscaleMode === 'sharpen') {
                     vfFilters.push('unsharp=5:5:1.5:5:5:0.5');
@@ -821,9 +889,9 @@ function runFFmpegPipeline(job, options) {
         });
 
         cmd.on('error', (err) => {
-            console.error('FFmpeg error:', err.message);
+            console.error('[FFmpeg Error]:', err.message);
             job.status = 'error';
-            job.error = err.message;
+            job.error = err.message || 'Encoding process encountered an error.';
             job.stage = 'Error';
             resolve();
         });
@@ -934,6 +1002,10 @@ setInterval(() => {
             if (!fs.existsSync(dir)) return;
             fs.readdirSync(dir).forEach(file => {
                 const filePath = path.join(dir, file);
+                
+                // Do not delete files that belong to an active or queued job
+                if (isFileInActiveJob(filePath)) return;
+
                 const stat = fs.statSync(filePath);
                 if (now - stat.mtimeMs > maxAge) {
                     if (stat.isDirectory()) {

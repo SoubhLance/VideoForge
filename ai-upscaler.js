@@ -16,7 +16,7 @@ const ffmpeg = require('fluent-ffmpeg');
 
 const TOOLS_DIR = path.join(__dirname, 'tools');
 const TEMP_DIR = path.join(__dirname, 'temp');
-const EXE_NAME = 'realesrgan-ncnn-vulkan.exe';
+const EXE_NAME = process.platform === 'win32' ? 'realesrgan-ncnn-vulkan.exe' : 'realesrgan-ncnn-vulkan';
 
 // Cached GPU info
 let detectedGpu = { id: 0, name: 'Auto/Default' };
