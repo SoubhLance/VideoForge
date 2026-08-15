@@ -26,11 +26,10 @@ No uploads, no cloud processing, no subscription — everything runs on your mac
 
 **Workstation UI** — dark-themed desktop layout with format selection, encoder profile, deinterlacing, and neural upscaling controls in the inspector panel:
 
-![VideoForge workstation UI](./screenshots/workstation.png)
+<img width="1919" height="953" alt="image" src="https://github.com/user-attachments/assets/beb76d4f-30fd-4996-8301-af9e7cdfd5d4" />
+
 
 **Launch splash screen:**
-
-![VideoForge splash screen](./screenshots/splash.png)
 
 ---
 
