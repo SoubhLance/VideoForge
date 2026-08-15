@@ -45,3 +45,6 @@ npm-debug.log*
 .env.local
 .env.*.local
 dist/
+
+tools/ffmpeg.exe
+tools/ffprobe.exe
