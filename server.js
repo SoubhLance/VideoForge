@@ -19,9 +19,10 @@ process.on('unhandledRejection', (reason) => {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Directories
-const UPLOAD_DIR = path.join(__dirname, 'uploads');
-const OUTPUT_DIR = path.join(__dirname, 'outputs');
+// Directories (Writable in packaged desktop / portable executable environment)
+const BASE_DIR = process.env.PORTABLE_EXECUTABLE_DIR || process.cwd();
+const UPLOAD_DIR = path.join(BASE_DIR, 'uploads');
+const OUTPUT_DIR = path.join(BASE_DIR, 'outputs');
 [UPLOAD_DIR, OUTPUT_DIR].forEach(d => { if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); });
 
 // AI availability status (set at startup)
@@ -1037,7 +1038,7 @@ setInterval(() => {
 
 
 // ─── Start server ───────────────────────────────────────────────────
-async function start() {
+async function start(port = PORT) {
     await checkFFmpeg();
 
     // Check AI tool availability
@@ -1051,20 +1052,28 @@ async function start() {
         console.log(`   Run "node setup-tools.js" to install automatically`);
     }
 
-    const server = app.listen(PORT, () => {
-        console.log(`\n🎬 VideoForge server running at http://localhost:${PORT}\n`);
-    });
+    return new Promise((resolve, reject) => {
+        const server = app.listen(port, () => {
+            const actualPort = server.address().port;
+            console.log(`\n🎬 VideoForge server running at http://localhost:${actualPort}\n`);
+            resolve(server);
+        });
 
-    server.on('error', (err) => {
-        if (err.code === 'EADDRINUSE') {
-            console.error(`\n❌ Port ${PORT} is already in use.`);
-            console.error(`   Either stop the other process or use a different port:`);
-            console.error(`   PORT=3001 node server.js\n`);
-        } else {
-            console.error('Server error:', err);
-        }
-        process.exit(1);
+        server.on('error', (err) => {
+            if (err.code === 'EADDRINUSE') {
+                console.error(`\n❌ Port ${port} is already in use.`);
+                console.error(`   Either stop the other process or use a different port.`);
+            } else {
+                console.error('Server error:', err);
+            }
+            reject(err);
+        });
     });
 }
 
-start();
+if (require.main === module) {
+    start().catch(() => process.exit(1));
+}
+
+module.exports = { app, start };
+

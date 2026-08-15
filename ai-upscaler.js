@@ -14,9 +14,18 @@ const path = require('path');
 const fs = require('fs');
 const ffmpeg = require('fluent-ffmpeg');
 
-const TOOLS_DIR = path.join(__dirname, 'tools');
-const TEMP_DIR = path.join(__dirname, 'temp');
+const BASE_DIR = process.env.PORTABLE_EXECUTABLE_DIR || process.cwd();
+const TEMP_DIR = path.join(BASE_DIR, 'temp');
 const EXE_NAME = process.platform === 'win32' ? 'realesrgan-ncnn-vulkan.exe' : 'realesrgan-ncnn-vulkan';
+
+function getCandidateToolsDirs() {
+  const dirs = [];
+  if (process.resourcesPath) dirs.push(path.join(process.resourcesPath, 'tools'));
+  if (process.env.PORTABLE_EXECUTABLE_DIR) dirs.push(path.join(process.env.PORTABLE_EXECUTABLE_DIR, 'tools'));
+  dirs.push(path.join(__dirname, 'tools'));
+  dirs.push(path.join(process.cwd(), 'tools'));
+  return dirs;
+}
 
 // Cached GPU info
 let detectedGpu = { id: 0, name: 'Auto/Default' };
@@ -108,7 +117,11 @@ function detectBestGpu(exePath) {
 
 // ─── Check if AI upscaler is available ──────────────────────────────
 async function checkAIAvailability() {
-  const exePath = findExe(TOOLS_DIR);
+  let exePath = null;
+  for (const dir of getCandidateToolsDirs()) {
+    exePath = findExe(dir);
+    if (exePath) break;
+  }
   if (!exePath) {
     return { available: false, path: null, reason: 'Real-ESRGAN executable not found in tools/' };
   }
@@ -407,7 +420,11 @@ async function processVideoWithAI(job, options) {
 
 // ─── Initialize GPU detection on module load ─────────────────────────
 (async () => {
-  const exePath = findExe(TOOLS_DIR);
+  let exePath = null;
+  for (const dir of getCandidateToolsDirs()) {
+    exePath = findExe(dir);
+    if (exePath) break;
+  }
   if (exePath) {
     detectedGpu = await detectBestGpu(exePath);
   }
