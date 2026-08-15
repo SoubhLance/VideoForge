@@ -48,13 +48,11 @@ function findExe(dir) {
 // ─── Detect Best GPU (NVIDIA / AMD discrete GPU over Intel iGPU) ─────
 function detectBestGpu(exePath) {
   try {
-    const testImg = path.join(TOOLS_DIR, 'input.jpg');
-    const testOut = path.join(TEMP_DIR, '_gputest.jpg');
+    const dummyImg = path.join(__dirname, 'public', 'favicon.ico');
+    const testOut = path.join(TEMP_DIR, '_gputest.png');
     if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
 
-    const args = fs.existsSync(testImg) 
-      ? ['-i', testImg, '-o', testOut] 
-      : ['-v'];
+    const args = ['-i', dummyImg, '-o', testOut, '-v'];
 
     const res = spawn(exePath, args, { cwd: path.dirname(exePath) });
     let output = '';
@@ -65,7 +63,18 @@ function detectBestGpu(exePath) {
       
       const timeout = setTimeout(() => {
         try { res.kill(); } catch (e) {}
-        resolve({ id: 0, name: 'Default GPU' });
+        const fallbackRes = {
+          gpuDetected: false,
+          gpus: [],
+          id: null,
+          name: 'No compatible GPU detected',
+          selectedGpu: null,
+          status: 'Unavailable',
+          fallback: 'CPU',
+          warning: 'Using CPU: No compatible GPU detected. Rendering videos may take longer.'
+        };
+        detectedGpu = fallbackRes;
+        resolve(fallbackRes);
       }, 6000);
 
       res.on('close', () => {
@@ -73,9 +82,6 @@ function detectBestGpu(exePath) {
         try { if (fs.existsSync(testOut)) fs.unlinkSync(testOut); } catch (e) {}
 
         const gpuLines = output.split('\n').filter(l => l.includes('[') && l.includes(']'));
-        
-        let bestId = 0;
-        let bestName = 'Default GPU';
         const gpus = [];
 
         for (const line of gpuLines) {
@@ -84,34 +90,59 @@ function detectBestGpu(exePath) {
             const id = parseInt(match[1], 10);
             const name = match[2].trim();
             if (!gpus.some(g => g.id === id)) {
-              gpus.push({ id, name });
+              const isDiscrete = ['nvidia', 'geforce', 'rtx', 'gtx', 'radeon', 'amd', 'arc'].some(kw => name.toLowerCase().includes(kw));
+              gpus.push({ id, name, isDiscrete, status: 'Detected ✓' });
             }
           }
         }
 
         if (gpus.length > 0) {
           // Prefer discrete GPUs (NVIDIA / GeForce / RTX / GTX / Radeon / AMD / Arc)
-          const discreteKeywords = ['nvidia', 'geforce', 'rtx', 'gtx', 'radeon', 'amd', 'arc'];
-          const discreteGpu = gpus.find(g => 
-            discreteKeywords.some(kw => g.name.toLowerCase().includes(kw))
-          );
+          const discreteGpu = gpus.find(g => g.isDiscrete);
+          const selected = discreteGpu || gpus[gpus.length - 1];
+          gpus.forEach(g => g.selected = (g.id === selected.id));
 
-          if (discreteGpu) {
-            bestId = discreteGpu.id;
-            bestName = discreteGpu.name;
-          } else {
-            bestId = gpus[gpus.length - 1].id;
-            bestName = gpus[gpus.length - 1].name;
-          }
+          console.log(`[GPU Setup] Verified ${gpus.length} GPU(s). Selected GPU ${selected.id}: "${selected.name}"`);
+          detectedGpu = {
+            gpuDetected: true,
+            gpus: gpus,
+            id: selected.id,
+            name: selected.name,
+            selectedGpu: selected,
+            status: 'Detected ✓',
+            fallback: null,
+            warning: null
+          };
+          resolve(detectedGpu);
+        } else {
+          console.warn('[GPU Setup] No Vulkan-compatible GPU detected. Switching to CPU fallback.');
+          detectedGpu = {
+            gpuDetected: false,
+            gpus: [],
+            id: null,
+            name: 'No compatible GPU detected',
+            selectedGpu: null,
+            status: 'Unavailable',
+            fallback: 'CPU',
+            warning: 'Using CPU: No compatible GPU detected. Rendering videos may take longer.'
+          };
+          resolve(detectedGpu);
         }
-
-        console.log(`[GPU Setup] Detected ${gpus.length} GPU(s). Selected GPU ${bestId}: "${bestName}"`);
-        detectedGpu = { id: bestId, name: bestName };
-        resolve({ id: bestId, name: bestName });
       });
     });
   } catch (err) {
-    return Promise.resolve({ id: 0, name: 'Default GPU' });
+    const fallbackRes = {
+      gpuDetected: false,
+      gpus: [],
+      id: null,
+      name: 'No compatible GPU detected',
+      selectedGpu: null,
+      status: 'Unavailable',
+      fallback: 'CPU',
+      warning: 'Using CPU: No compatible GPU detected. Rendering videos may take longer.'
+    };
+    detectedGpu = fallbackRes;
+    return Promise.resolve(fallbackRes);
   }
 }
 
@@ -123,14 +154,34 @@ async function checkAIAvailability() {
     if (exePath) break;
   }
   if (!exePath) {
-    return { available: false, path: null, reason: 'Real-ESRGAN executable not found in tools/' };
+    return {
+      available: false,
+      exeAvailable: false,
+      path: null,
+      gpuDetected: false,
+      gpu: null,
+      gpus: [],
+      fallback: 'CPU',
+      warning: 'Real-ESRGAN executable not found in tools/. Using CPU fallback.'
+    };
   }
 
-  if (!detectedGpu || detectedGpu.name === 'Auto/Default' || detectedGpu.name === 'Default GPU') {
+  if (!detectedGpu || !detectedGpu.gpuDetected || detectedGpu.name === 'Default GPU' || detectedGpu.name === 'Auto/Default') {
     detectedGpu = await detectBestGpu(exePath);
   }
 
-  return { available: true, path: exePath, gpu: detectedGpu };
+  const isGpuReady = detectedGpu && detectedGpu.gpuDetected === true;
+
+  return {
+    available: isGpuReady,
+    exeAvailable: true,
+    path: exePath,
+    gpuDetected: isGpuReady,
+    gpu: isGpuReady ? detectedGpu.selectedGpu || { id: detectedGpu.id, name: detectedGpu.name, status: 'Detected ✓' } : null,
+    gpus: detectedGpu.gpus || [],
+    fallback: isGpuReady ? null : 'CPU',
+    warning: isGpuReady ? null : (detectedGpu.warning || 'Using CPU: No compatible GPU detected. Rendering videos may take longer.')
+  };
 }
 
 // ─── Safe FPS parser ────────────────────────────────────────────────

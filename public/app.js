@@ -51,20 +51,36 @@ const timelineScrub = document.getElementById('timelineScrub');
 const timelineHead = document.getElementById('timelineHead');
 const timecodeEl = document.getElementById('timecodeEl');
 
-// ─── Check AI availability on load ─────────────────────────────
+// ─── Check AI & GPU availability on load ─────────────────────────
+let aiData = null;
+
 async function checkAIStatus() {
     try {
         const res = await fetch(`${API}/api/ai-status`);
         const data = await res.json();
-        aiAvailable = data.available;
+        aiData = data;
+        aiAvailable = data.available && data.gpuDetected;
+
         if (aiBadge) {
-            const gpuName = data.gpu ? data.gpu.name : 'GPU';
-            aiBadge.textContent = aiAvailable ? `AI Ready (${gpuName})` : 'AI Unavailable';
-            aiBadge.classList.toggle('ai-ready', aiAvailable);
-            aiBadge.classList.toggle('ai-off', !aiAvailable);
+            if (data.gpuDetected && data.gpu) {
+                aiBadge.textContent = `AI Ready (${data.gpu.name})`;
+                aiBadge.classList.add('ai-ready');
+                aiBadge.classList.remove('ai-off');
+                hideWarning();
+            } else {
+                aiBadge.textContent = 'NO GPU (Using CPU)';
+                aiBadge.classList.remove('ai-ready');
+                aiBadge.classList.add('ai-off');
+                showWarning(data.warning || 'Using CPU: No compatible GPU detected. Rendering videos may take longer.');
+            }
         }
     } catch (e) {
         aiAvailable = false;
+        if (aiBadge) {
+            aiBadge.textContent = 'NO GPU (Using CPU)';
+            aiBadge.classList.remove('ai-ready');
+            aiBadge.classList.add('ai-off');
+        }
     }
 }
 checkAIStatus();
@@ -347,7 +363,7 @@ function setupVideoPreview(file) {
     }
 
     const ext = file.name.split('.').pop().toLowerCase();
-    isNativeBrowserFormat = ['mp4', 'webm'].includes(ext) && file.size < 300 * 1024 * 1024;
+    isNativeBrowserFormat = ['mp4', 'webm'].includes(ext);
 
     if (isNativeBrowserFormat) {
         currentObjectUrl = URL.createObjectURL(file);
@@ -861,42 +877,43 @@ function openAboutModal() {
     closeActiveModal();
 
     const modal = document.createElement('div');
-    modal.className = 'vf-modal-overlay';
+    modal.className = 'vf-modal-overlay vf-glass-overlay';
     modal.id = 'vfActiveModal';
 
     modal.innerHTML = `
-        <div class="vf-modal vf-modal-md">
-            <div class="vf-modal-header">
-                <div class="vf-modal-title">ℹ️ About VideoForge</div>
+        <div class="vf-modal vf-modal-md vf-modal-glass">
+            <div class="vf-modal-header" style="background: rgba(0, 0, 0, 0.3); border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+                <div class="vf-modal-title">✨ About VideoForge Workstation</div>
                 <button class="vf-modal-close" type="button">✕</button>
             </div>
             <div class="vf-modal-body" style="text-align: center; padding: 28px 24px;">
-                <div style="width: 56px; height: 56px; background: var(--accent-surface); border: 1px solid var(--accent); border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; color: var(--accent); margin-bottom: 12px;">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-                </div>
-                <h3 style="font-size: 20px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">VideoForge <span style="font-size: 12px; font-family: var(--font-mono); color: var(--accent); font-weight: 600; vertical-align: middle;">v1.0.0</span></h3>
-                <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">Professional Video Processing & AI Upscaling Workstation</p>
+                <img src="logo.png" alt="VideoForge Logo" class="vf-about-logo">
+                <h3 style="font-size: 22px; font-weight: 800; color: var(--text-primary); margin-bottom: 4px; letter-spacing: -0.02em;">
+                    VideoForge 
+                    <span style="font-size: 11px; font-family: var(--font-mono); background: rgba(243, 156, 18, 0.2); color: #f39c12; border: 1px solid rgba(243, 156, 18, 0.4); border-radius: 12px; padding: 3px 10px; font-weight: 700; vertical-align: middle; margin-left: 6px;">v1.0.0 (Build 2026.1)</span>
+                </h3>
+                <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 20px;">Next-Generation Video Transcoding & AI Super-Resolution Workstation</p>
 
-                <div style="background: var(--bg-panel-dark); border: 1px solid var(--border-default); border-radius: var(--radius); padding: 16px; text-align: left; margin-bottom: 20px; font-size: 12px; line-height: 1.6; color: var(--text-secondary);">
+                <div class="vf-glass-card">
                     <p style="margin-bottom: 10px;">
-                        <strong style="color: var(--text-primary);">👨‍💻 Developed By:</strong> <span style="color: var(--accent); font-weight: 600;">Soubhik Sadhu</span>
+                        <strong style="color: var(--text-primary);">👨‍💻 Lead Developer:</strong> <span style="color: var(--accent); font-weight: 700;">Soubhik Sadhu</span>
                     </p>
                     <p style="margin-bottom: 10px;">
-                        <strong style="color: var(--text-primary);">🎬 Built For Legacy Media:</strong> Specifically designed to transcode and recover <strong>old/legacy video files</strong> (such as <code>.dat</code>, <code>.vob</code>, <code>.flv</code>, <code>.3gp</code>, <code>.avi</code>, <code>.mpeg</code>) that are not supported or fail to open in modern editors like <strong>Adobe Premiere Pro</strong> or <strong>After Effects</strong>.
+                        <strong style="color: var(--text-primary);">🎬 Built For Legacy Media:</strong> Engineered to transcode and recover <strong>old/legacy media files</strong> (such as <code>.dat</code>, <code>.vob</code>, <code>.flv</code>, <code>.3gp</code>, <code>.avi</code>, <code>.mpeg</code>) that are unsupported or fail to open in modern editors like <strong>Adobe Premiere Pro</strong> or <strong>After Effects</strong>.
                     </p>
                     <p style="margin-bottom: 0;">
-                        <strong style="color: var(--text-primary);">💖 Free & Open Source:</strong> VideoForge is completely free to use! If you encounter any bugs or want to enhance functionality, feel free to create a pull request or contribute to the project.
+                        <strong style="color: var(--text-primary);">💖 Open Source & Community Driven:</strong> VideoForge is completely free to use! If you encounter any issues or want to enhance functionality, feel free to contribute on GitHub.
                     </p>
                 </div>
 
-                <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
-                    <a href="https://github.com/SoubhLance/VideoForge" target="_blank" rel="noopener noreferrer" class="vf-btn vf-btn-primary" style="display: inline-flex; align-items: center; gap: 8px; text-decoration: none; padding: 9px 20px; font-size: 13px;">
+                <div style="display: flex; align-items: center; justify-content: center; gap: 12px;">
+                    <a href="https://github.com/SoubhLance/VideoForge" target="_blank" rel="noopener noreferrer" class="vf-btn vf-btn-primary" style="display: inline-flex; align-items: center; gap: 8px; text-decoration: none; padding: 10px 22px; font-size: 13px; font-weight: 600; border-radius: 6px; box-shadow: 0 4px 14px rgba(243, 156, 18, 0.3);">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
                         GitHub: SoubhLance/VideoForge
                     </a>
                 </div>
             </div>
-            <div class="vf-modal-footer">
+            <div class="vf-modal-footer" style="background: rgba(0, 0, 0, 0.3); border-top: 1px solid rgba(255, 255, 255, 0.1);">
                 <button class="vf-btn vf-btn-secondary vf-modal-cancel" type="button">Close</button>
             </div>
         </div>
@@ -1328,16 +1345,42 @@ function openSettingsModal() {
                 </div>
 
                 <div class="vf-settings-group">
-                    <label class="control-label">HARDWARE ACCELERATION & AI STATUS</label>
+                    <label class="control-label">HARDWARE ACCELERATION & GPU STATUS</label>
                     <div class="vf-status-box">
                         <div class="vf-status-line">
                             <span>FFmpeg Engine:</span>
                             <span class="status-tag status-ready">DETECTED & READY</span>
                         </div>
+                        ${aiData && aiData.gpuDetected && aiData.gpu ? `
                         <div class="vf-status-line" style="margin-top: 6px;">
-                            <span>Real-ESRGAN AI Acceleration:</span>
-                            <span class="status-tag ${aiAvailable ? 'status-ready' : 'status-off'}">${aiAvailable ? 'GPU ACCELERATED' : 'UNAVAILABLE (FFmpeg Fallback Active)'}</span>
+                            <span>GPU Device:</span>
+                            <strong style="color: var(--accent); font-size: 12px;">${aiData.gpu.name}</strong>
                         </div>
+                        <div class="vf-status-line" style="margin-top: 6px;">
+                            <span>GPU Status:</span>
+                            <span class="status-tag status-ready">Detected ✓</span>
+                        </div>
+                        <div class="vf-status-line" style="margin-top: 6px;">
+                            <span>AI Selected:</span>
+                            <span class="status-tag status-ready">Yes (GPU ${aiData.gpu.id !== undefined ? aiData.gpu.id : 0})</span>
+                        </div>
+                        ` : `
+                        <div class="vf-status-line" style="margin-top: 6px;">
+                            <span>GPU Device:</span>
+                            <span class="status-tag status-off">No compatible GPU detected</span>
+                        </div>
+                        <div class="vf-status-line" style="margin-top: 6px;">
+                            <span>GPU Status:</span>
+                            <span class="status-tag status-off">Unavailable</span>
+                        </div>
+                        <div class="vf-status-line" style="margin-top: 6px;">
+                            <span>Fallback:</span>
+                            <span class="status-tag status-off">CPU</span>
+                        </div>
+                        <div style="margin-top: 10px; padding: 8px 12px; background: rgba(243, 156, 18, 0.15); border: 1px solid #f39c12; border-radius: 4px; color: #f39c12; font-size: 11px;">
+                            ⚠️ Using CPU: No compatible GPU detected. Rendering videos may take longer.
+                        </div>
+                        `}
                     </div>
                 </div>
 

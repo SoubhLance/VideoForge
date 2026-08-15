@@ -7,8 +7,9 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "electron": "electron .",
-    "dist": "electron-builder --win portable",
-    "dist:installer": "electron-builder --win nsis"
+    "dist": "electron-builder --win nsis portable",
+    "dist:installer": "electron-builder --win nsis",
+    "dist:portable": "electron-builder --win portable"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -32,6 +33,7 @@
       "server.js",
       "ai-upscaler.js",
       "public/**/*",
+      "build/icon.ico",
       "package.json"
     ],
     "extraResources": [
@@ -45,12 +47,23 @@
     ],
     "win": {
       "target": [
-        "dir",
-        "zip"
+        "nsis",
+        "portable"
       ],
-      "forceCodeSigning": false,
+      "icon": "build/icon.ico",
       "signAndEditExecutable": false,
-      "sign": null
+      "sign": null,
+      "verifyUpdateCodeSignature": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "VideoForge",
+      "uninstallDisplayName": "VideoForge",
+      "artifactName": "VideoForge Setup 1.0.0.exe",
+      "perMachine": false
     }
   }
 }

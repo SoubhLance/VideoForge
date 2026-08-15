@@ -1666,6 +1666,48 @@ input, button, select, textarea {
 .vf-modal-md { max-width: 580px; }
 .vf-modal-lg { max-width: 760px; }
 
+/* Frosted Glassmorphism Popup Styles */
+.vf-glass-overlay {
+  background: rgba(0, 0, 0, 0.55) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+}
+
+.vf-modal-glass {
+  background: rgba(18, 18, 24, 0.78) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7), 0 0 35px rgba(243, 156, 18, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+  border-radius: 12px !important;
+}
+
+.vf-about-logo {
+  width: 76px;
+  height: 76px;
+  object-fit: contain;
+  margin-bottom: 10px;
+  filter: drop-shadow(0 6px 18px rgba(243, 156, 18, 0.45));
+  transition: transform 300ms ease;
+}
+
+.vf-about-logo:hover {
+  transform: scale(1.08) rotate(3deg);
+}
+
+.vf-glass-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  backdrop-filter: blur(8px);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: left;
+  margin-bottom: 20px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
 .vf-modal-header {
   height: 48px;
   background: var(--bg-panel-dark);

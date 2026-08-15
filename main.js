@@ -19,12 +19,16 @@ async function createWindow() {
         minWidth: 900,
         minHeight: 650,
         title: 'VideoForge — Video Converter & Upscaler',
-        autoHideMenuBar: false,
+        icon: path.join(__dirname, 'build', 'icon.ico'),
+        autoHideMenuBar: true,
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true
         }
     });
+
+    // Remove the extra native Electron top navbar (VideoForge has its own HTML UI navbar)
+    mainWindow.setMenu(null);
 
     // Load web interface from embedded Express server
     mainWindow.loadURL(`http://localhost:${port}`);

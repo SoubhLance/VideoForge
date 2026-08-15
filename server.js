@@ -25,6 +25,34 @@ const UPLOAD_DIR = path.join(BASE_DIR, 'uploads');
 const OUTPUT_DIR = path.join(BASE_DIR, 'outputs');
 [UPLOAD_DIR, OUTPUT_DIR].forEach(d => { if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); });
 
+// Automatically detect and set bundled FFmpeg/FFprobe binaries if available
+function configureBundledFFmpeg() {
+    const candidateDirs = [];
+    if (process.resourcesPath) candidateDirs.push(path.join(process.resourcesPath, 'tools'));
+    if (process.env.PORTABLE_EXECUTABLE_DIR) candidateDirs.push(path.join(process.env.PORTABLE_EXECUTABLE_DIR, 'tools'));
+    candidateDirs.push(path.join(__dirname, 'tools'));
+    candidateDirs.push(path.join(process.cwd(), 'tools'));
+
+    const ffmpegExe = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
+    const ffprobeExe = process.platform === 'win32' ? 'ffprobe.exe' : 'ffprobe';
+
+    for (const dir of candidateDirs) {
+        if (!fs.existsSync(dir)) continue;
+        const ffmpegPath = path.join(dir, ffmpegExe);
+        const ffprobePath = path.join(dir, ffprobeExe);
+        if (fs.existsSync(ffmpegPath)) {
+            ffmpeg.setFfmpegPath(ffmpegPath);
+            console.log(`[FFmpeg Setup] Using bundled FFmpeg binary: "${ffmpegPath}"`);
+        }
+        if (fs.existsSync(ffprobePath)) {
+            ffmpeg.setFfprobePath(ffprobePath);
+            console.log(`[FFmpeg Setup] Using bundled FFprobe binary: "${ffprobePath}"`);
+        }
+        if (fs.existsSync(ffmpegPath)) break;
+    }
+}
+configureBundledFFmpeg();
+
 // AI availability status (set at startup)
 let aiStatus = { available: false, path: null };
 
@@ -250,10 +278,59 @@ app.get('/api/stream/:id', (req, res) => {
     }
 });
 
-// ─── GET /api/preview/:id (Fast H.264 preview stream for legacy .DAT / .VOB / .AVI) ───
+// ─── GET /api/stream/:id (Stream original file with HTTP Range support for seeking) ───
+app.get('/api/stream/:id', (req, res) => {
+    const job = getOrCreateJob(req.params.id);
+    if (!job) return res.status(404).json({ error: 'File not found' });
+
+    const filePath = job.inputPath;
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Source file missing' });
+
+    const stat = fs.statSync(filePath);
+    const fileSize = stat.size;
+    const range = req.headers.range;
+
+    // Determine MIME type
+    const extToMime = {
+        '.mp4': 'video/mp4', '.webm': 'video/webm', '.mkv': 'video/x-matroska',
+        '.avi': 'video/x-msvideo', '.mov': 'video/quicktime', '.flv': 'video/x-flv',
+        '.mpeg': 'video/mpeg', '.mpg': 'video/mpeg', '.3gp': 'video/3gpp',
+        '.vob': 'video/mpeg', '.dat': 'video/mpeg'
+    };
+    const mime = extToMime[job.inputExt] || 'application/octet-stream';
+
+    if (range) {
+        const parts = range.replace(/bytes=/, '').split('-');
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+        const chunkSize = end - start + 1;
+
+        res.writeHead(206, {
+            'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+            'Accept-Ranges': 'bytes',
+            'Content-Length': chunkSize,
+            'Content-Type': mime,
+        });
+        fs.createReadStream(filePath, { start, end }).pipe(res);
+    } else {
+        res.writeHead(200, {
+            'Content-Length': fileSize,
+            'Content-Type': mime,
+            'Accept-Ranges': 'bytes',
+        });
+        fs.createReadStream(filePath).pipe(res);
+    }
+});
+
+// ─── GET /api/preview/:id (Full-duration H.264 preview for legacy .DAT / .VOB / .AVI) ───
 app.get('/api/preview/:id', (req, res) => {
     const job = getOrCreateJob(req.params.id);
     if (!job) return res.status(404).json({ error: 'File not found' });
+
+    // For standard web MP4/WebM files, stream the original file directly with Range support
+    if (job.inputExt === '.mp4' || job.inputExt === '.webm') {
+        return res.redirect(`/api/stream/${req.params.id}`);
+    }
 
     const tempDir = aiUpscaler.TEMP_DIR || path.join(__dirname, 'temp');
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
@@ -265,13 +342,8 @@ app.get('/api/preview/:id', (req, res) => {
         return res.sendFile(previewPath);
     }
 
-    // For standard web MP4/WebM files, stream source directly
-    if (job.inputExt === '.mp4' || job.inputExt === '.webm') {
-        return res.redirect(`/api/stream/${req.params.id}`);
-    }
-
-    // For legacy formats (.dat, .vob, .avi, .flv, .3gp, .mpeg), generate a fast 15-second H.264 MP4 preview clip
-    console.log(`[Preview] Generating fast preview clip for legacy asset ${req.params.id} (${job.inputExt})...`);
+    // For legacy formats (.dat, .vob, .avi, .flv, .3gp, .mpeg), generate a full-duration H.264 MP4 preview
+    console.log(`[Preview] Generating full-duration preview for legacy asset ${req.params.id} (${job.inputExt})...`);
 
     let cmd = ffmpeg(job.inputPath);
     if (job.inputExt === '.dat') {
@@ -279,8 +351,6 @@ app.get('/api/preview/:id', (req, res) => {
     }
 
     cmd.outputOptions([
-        '-ss', '0',
-        '-t', '15',
         '-vf', 'scale=640:-2:flags=fast_bilinear',
         '-c:v', 'libx264',
         '-preset', 'ultrafast',
@@ -292,11 +362,11 @@ app.get('/api/preview/:id', (req, res) => {
     ])
         .output(previewPath)
         .on('end', () => {
-            console.log(`[Preview] Fast MP4 preview clip generated: ${previewPath}`);
+            console.log(`[Preview] Full-duration MP4 preview generated: ${previewPath}`);
             res.sendFile(previewPath);
         })
         .on('error', (err) => {
-            console.error('[Preview] Fast preview error, falling back to direct stream:', err.message);
+            console.error('[Preview] Preview generation error, falling back to direct stream:', err.message);
             res.redirect(`/api/stream/${req.params.id}`);
         })
         .run();

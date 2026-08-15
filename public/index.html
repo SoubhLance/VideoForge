@@ -17,7 +17,7 @@
 <body>
     <!-- App Startup Loader -->
     <div id="appLoader" class="app-loader">
-        <video id="startupVideo" class="loader-video" autoplay playsinline preload="auto">
+        <video id="startupVideo" class="loader-video" autoplay muted playsinline preload="auto">
             <source src="loading.mp4" type="video/mp4">
         </video>
     </div>
@@ -29,57 +29,103 @@
             const video = document.getElementById('startupVideo');
             let isDismissed = false;
             let videoEnded = false;
-            let pageLoaded = false;
+            let appReady = false;
+            let videoDuration = 0;
 
             function checkAndDismiss() {
-                // Only dismiss once BOTH the full video has finished playing AND the page is loaded
-                if (videoEnded && pageLoaded) {
-                    dismissLoader();
+                // Only dismiss once BOTH the complete video has finished playing AND the app/backend is ready
+                if (videoEnded && appReady && !isDismissed) {
+                    isDismissed = true;
+                    if (loader) {
+                        loader.classList.add('fade-out');
+                        setTimeout(() => {
+                            loader.style.display = 'none';
+                        }, 500);
+                    }
                 }
             }
 
-            function dismissLoader() {
-                if (isDismissed) return;
-                isDismissed = true;
-                if (loader) {
-                    loader.classList.add('fade-out');
-                    setTimeout(() => {
-                        loader.style.display = 'none';
-                    }, 500);
+            function markVideoEnded() {
+                if (!videoEnded) {
+                    videoEnded = true;
+                    // Pause on the final frame so the splash holds still (not a black frame)
+                    if (video && !video.paused) {
+                        video.pause();
+                    }
+                    checkAndDismiss();
                 }
             }
 
             if (video) {
-                video.muted = false; // Enable audio with sound
-                video.volume = 1.0;
+                // Ensure we start from the very beginning
+                video.currentTime = 0;
+                video.muted = true;
+
+                video.addEventListener('loadedmetadata', () => {
+                    videoDuration = video.duration || 0;
+                    console.log('[Splash] Video duration:', videoDuration, 'seconds');
+                    // Ensure start from 0
+                    if (video.currentTime !== 0) {
+                        video.currentTime = 0;
+                    }
+                });
+
+                video.addEventListener('canplay', () => {
+                    console.log('[Splash] Video ready for playback');
+                });
 
                 const playPromise = video.play();
                 if (playPromise !== undefined) {
                     playPromise.catch((err) => {
-                        console.warn('Unmuted autoplay prevented by browser policy, trying muted fallback:', err);
+                        console.warn('[Splash] Autoplay blocked, retrying muted:', err);
                         video.muted = true;
                         video.play().catch(() => {});
                     });
                 }
 
-                // When full video finishes playing
+                // Primary: video's natural 'ended' event fires when playback reaches the end
                 video.addEventListener('ended', () => {
-                    videoEnded = true;
-                    checkAndDismiss();
+                    console.log('[Splash] Video ended event fired');
+                    markVideoEnded();
                 });
 
-                video.addEventListener('error', () => {
-                    videoEnded = true;
-                    pageLoaded = true;
-                    dismissLoader();
+                // Backup: if 'ended' doesn't fire, detect end via timeupdate
+                video.addEventListener('timeupdate', () => {
+                    if (videoDuration > 0 && video.currentTime >= videoDuration - 0.05 && !videoEnded) {
+                        console.log('[Splash] Video reached end via timeupdate');
+                        markVideoEnded();
+                    }
                 });
+
+                // Handle errors gracefully — don't block the app
+                video.addEventListener('error', (e) => {
+                    console.warn('[Splash] Video error:', e);
+                    markVideoEnded();
+                });
+
+                // Handle stalled/suspended playback
+                video.addEventListener('stalled', () => {
+                    console.warn('[Splash] Video stalled');
+                });
+
             } else {
                 videoEnded = true;
             }
 
+            function verifyAppReady() {
+                fetch('/api/ai-status')
+                    .then(res => res.json())
+                    .then(() => {
+                        appReady = true;
+                        checkAndDismiss();
+                    })
+                    .catch(() => {
+                        setTimeout(verifyAppReady, 250);
+                    });
+            }
+
             window.addEventListener('load', () => {
-                pageLoaded = true;
-                checkAndDismiss();
+                verifyAppReady();
             });
         });
     </script>
