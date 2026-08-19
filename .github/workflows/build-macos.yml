@@ -1,0 +1,118 @@
+name: Build macOS DMG
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    name: Build macOS Universal DMG
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate macOS Iconset and .icns File
+        run: |
+          echo "Generating macOS iconset from public/logo.png..."
+          ICONSET_DIR="build/VideoForge.iconset"
+          mkdir -p "$ICONSET_DIR"
+          
+          # Generate exact PNG resolutions required by macOS iconset spec
+          sips -z 16 16     public/logo.png --out "$ICONSET_DIR/icon_16x16.png"
+          sips -z 32 32     public/logo.png --out "$ICONSET_DIR/icon_16x16@2x.png"
+          sips -z 32 32     public/logo.png --out "$ICONSET_DIR/icon_32x32.png"
+          sips -z 64 64     public/logo.png --out "$ICONSET_DIR/icon_32x32@2x.png"
+          sips -z 128 128   public/logo.png --out "$ICONSET_DIR/icon_128x128.png"
+          sips -z 256 256   public/logo.png --out "$ICONSET_DIR/icon_128x128@2x.png"
+          sips -z 256 256   public/logo.png --out "$ICONSET_DIR/icon_256x256.png"
+          sips -z 512 512   public/logo.png --out "$ICONSET_DIR/icon_256x256@2x.png"
+          sips -z 512 512   public/logo.png --out "$ICONSET_DIR/icon_512x512.png"
+          sips -z 1024 1024 public/logo.png --out "$ICONSET_DIR/icon_512x512@2x.png"
+          
+          # Compile iconset to build/icon.icns
+          iconutil -c icns "$ICONSET_DIR" -o build/icon.icns
+          rm -rf "$ICONSET_DIR"
+          
+          echo "✅ Generated build/icon.icns:"
+          file build/icon.icns
+
+      - name: Download & Prepare Native macOS Binaries (FFmpeg, FFprobe, Real-ESRGAN)
+        run: |
+          mkdir -p tools
+          
+          echo "⬇ Downloading Real-ESRGAN ncnn Vulkan for macOS..."
+          curl -L -o realesrgan-macos.zip "https://github.com/xinntao/Real-ESRGAN-ncnn-vulkan/releases/download/v0.2.0/realesrgan-ncnn-vulkan-v0.2.0-macos.zip"
+          mkdir -p temp_realesrgan
+          unzip -q realesrgan-macos.zip -d temp_realesrgan
+          
+          # Copy executable and models folder into tools/
+          find temp_realesrgan -type f -name "realesrgan-ncnn-vulkan" -exec cp {} tools/ \;
+          find temp_realesrgan -type d -name "models" -exec cp -R {} tools/ \;
+          rm -rf temp_realesrgan realesrgan-macos.zip
+
+          echo "⬇ Downloading FFmpeg & FFprobe static binaries for macOS..."
+          curl -L -o ffmpeg.zip "https://evermeet.cx/ffmpeg/getrelease/zip"
+          unzip -q ffmpeg.zip -d tools/
+          rm ffmpeg.zip
+
+          curl -L -o ffprobe.zip "https://evermeet.cx/ffmpeg/getrelease/ffprobe/zip"
+          unzip -q ffprobe.zip -d tools/
+          rm ffprobe.zip
+
+          # Set executable permissions and remove macOS quarantine metadata
+          chmod +x tools/ffmpeg tools/ffprobe tools/realesrgan-ncnn-vulkan
+          xattr -dr com.apple.quarantine tools/* || true
+
+          # Ad-hoc sign native binaries so macOS permits execution
+          codesign -s - --force tools/ffmpeg || true
+          codesign -s - --force tools/ffprobe || true
+          codesign -s - --force tools/realesrgan-ncnn-vulkan || true
+
+          echo "🔍 Verifying native macOS binaries:"
+          file tools/ffmpeg
+          file tools/ffprobe
+          file tools/realesrgan-ncnn-vulkan
+
+          echo "🔍 Verifying execution:"
+          ./tools/ffmpeg -version | head -n 1
+          ./tools/ffprobe -version | head -n 1
+          ./tools/realesrgan-ncnn-vulkan -h | head -n 5 || true
+
+      - name: Build macOS Universal DMG
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: npm run dist:mac
+
+      - name: Verify Output DMG Artifact
+        run: |
+          echo "Build output artifacts in dist/:"
+          ls -lh dist/
+
+      - name: Upload DMG Workflow Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VideoForge-macOS-DMG
+          path: dist/*.dmg
+          retention-days: 30
+
+      - name: Upload macOS DMG to GitHub Release (Tag Push Only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Attaching DMG to GitHub Release ${{ github.ref_name }}..."
+          # Note: --clobber=false ensures existing release assets (e.g. VideoForge Setup 1.0.0.exe) are preserved untouched
+          gh release upload ${{ github.ref_name }} dist/*.dmg --clobber=false --repo ${{ github.repository }}

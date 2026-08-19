@@ -232,10 +232,11 @@ DAT and VOB files (VCD/DVD) are auto-detected and decoded as raw video/audio str
 
 ## Roadmap
 
-- [ ] Electron + NSIS packaged installer for Windows
-- [ ] Bundled FFmpeg/Real-ESRGAN binaries (no separate install step)
+- [x] Electron + NSIS packaged installer for Windows (`VideoForge Setup 1.0.0.exe`)
+- [ ] macOS Universal DMG packaging (Coming Soon — CI workflow setup ready)
+- [ ] Linux AppImage / Deb packaging (Coming Soon)
 - [ ] Batch conversion queue improvements
-- [ ] macOS / Linux packaging
+
 
 ---
 

@@ -8,6 +8,8 @@
     "dev": "node --watch server.js",
     "electron": "electron .",
     "dist": "electron-builder --win nsis portable",
+    "dist:win": "electron-builder --win nsis portable",
+    "dist:mac": "electron-builder --mac",
     "dist:installer": "electron-builder --win nsis",
     "dist:portable": "electron-builder --win portable"
   },
@@ -35,7 +37,7 @@
       "server.js",
       "ai-upscaler.js",
       "public/**/*",
-      "build/icon.ico",
+      "build/*",
       "package.json"
     ],
     "extraResources": [
@@ -66,6 +68,34 @@
       "uninstallDisplayName": "VideoForge",
       "artifactName": "VideoForge Setup 1.0.0.exe",
       "perMachine": false
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "icon": "build/icon.icns",
+      "category": "public.app-category.video",
+      "artifactName": "VideoForge-${version}-mac-universal.dmg",
+      "identity": null
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
     }
   }
 }

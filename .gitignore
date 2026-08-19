@@ -48,3 +48,8 @@ dist/
 
 tools/ffmpeg.exe
 tools/ffprobe.exe
+tools/ffmpeg
+tools/ffprobe
+build/icon.icns
+build/*.iconset
+
