@@ -2,6 +2,9 @@ const { app, BrowserWindow, shell } = require('electron');
 const path = require('path');
 const serverModule = require('./server');
 
+// Set Windows App User Model ID so Task Manager / Taskbar shows "VideoForge"
+app.setAppUserModelId('com.videoforge.app');
+
 let mainWindow = null;
 let serverInstance = null;
 

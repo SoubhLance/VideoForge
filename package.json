@@ -20,11 +20,13 @@
   },
   "devDependencies": {
     "electron": "^34.2.0",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "rcedit": "^5.0.2"
   },
   "build": {
     "appId": "com.videoforge.app",
     "productName": "VideoForge",
+    "afterPack": "./afterPack.js",
     "directories": {
       "output": "dist"
     },
