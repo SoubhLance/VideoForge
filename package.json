@@ -78,10 +78,8 @@
           ]
         }
       ],
-      "universal": {
-        "x64ArchFiles": "**/tools/**",
-        "singleArchFiles": "**/tools/**"
-      },
+      "x64ArchFiles": "**/tools/**",
+      "singleArchFiles": "**/tools/**",
       "icon": "build/icon.icns",
       "category": "public.app-category.video",
       "artifactName": "VideoForge-${version}-mac-universal.dmg",
