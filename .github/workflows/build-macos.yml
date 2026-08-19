@@ -94,7 +94,8 @@ jobs:
       - name: Build macOS Universal DMG
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
-        run: npm run dist:mac
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --mac -p never
 
       - name: Verify Output DMG Artifact
         run: |

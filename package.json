@@ -83,7 +83,8 @@
       "icon": "build/icon.icns",
       "category": "public.app-category.video",
       "artifactName": "VideoForge-${version}-mac-universal.dmg",
-      "identity": null
+      "identity": null,
+      "publish": null
     },
     "dmg": {
       "contents": [
